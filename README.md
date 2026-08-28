@@ -1,4 +1,4 @@
-# Komoot Routing Buddy
+# Komoot Routing Helper
 
 A Manifest V3 browser extension that lets Komoot remember your map layer choices. Also puts MTB singletrail-scale rules (S0–S5) beside Komoot's Route Planner. Set a maximum difficulty to display, then choose whether each included level is coloured, marked dark red as an **avoid warning**, or visually de-emphasised.
 
