@@ -1,4 +1,5 @@
 (() => {
+	if (!/^\/tour\/[^/]+\/(zoom|edit)$/.test(location.pathname)) return;
 const contentSettings = globalThis.KrbSettings;
 
 const AVOID_COLOUR = "#7a1016";
@@ -25,8 +26,71 @@ function createPanel() {
   const panel = document.createElement("details");
   panel.id = "krb-panel";
   panel.open = true;
-  panel.innerHTML = `<summary><span class="krb-title"></span><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
+  panel.innerHTML = `<summary><span class="krb-title"></span><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
   document.documentElement.append(panel);
+	setupPanelControls(panel);
+}
+
+function setupPanelControls(panel) {
+	const header = panel.querySelector("summary");
+	const settings = panel.querySelector(".krb-panel__settings");
+	let drag;
+	let suppressClick = false;
+
+	function movePanel(left, top) {
+		panel.style.right = "auto";
+		panel.style.left = `${Math.max(0, Math.min(left, window.innerWidth - panel.offsetWidth))}px`;
+		panel.style.top = `${Math.max(0, Math.min(top, window.innerHeight - panel.offsetHeight))}px`;
+	}
+
+	header.addEventListener("pointerdown", function (event) {
+		if (event.button !== 0 || event.target.closest("button")) return;
+		const rect = panel.getBoundingClientRect();
+		suppressClick = false;
+		drag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+		header.setPointerCapture(event.pointerId);
+	});
+	header.addEventListener("pointermove", function (event) {
+		if (!drag || drag.id !== event.pointerId) return;
+		const dx = event.clientX - drag.x;
+		const dy = event.clientY - drag.y;
+		if (!suppressClick && Math.hypot(dx, dy) < 5) return;
+		suppressClick = true;
+		movePanel(drag.left + dx, drag.top + dy);
+	});
+	function finishDrag() {
+		drag = undefined;
+	}
+	header.addEventListener("pointerup", finishDrag);
+	header.addEventListener("pointercancel", finishDrag);
+	header.addEventListener("lostpointercapture", finishDrag);
+	header.addEventListener("click", function (event) {
+		if (suppressClick && event.detail !== 0) {
+			event.preventDefault();
+			suppressClick = false;
+		}
+	});
+	window.addEventListener("resize", function () {
+		const rect = panel.getBoundingClientRect();
+		movePanel(rect.left, rect.top);
+	});
+	panel.addEventListener("toggle", function () {
+		const rect = panel.getBoundingClientRect();
+		movePanel(rect.left, rect.top);
+	});
+	settings.addEventListener("click", async function (event) {
+		event.preventDefault();
+		event.stopPropagation();
+		try {
+			const result = await chrome.runtime.sendMessage({ type: "KRB_OPEN_SETTINGS" });
+			if (!result?.ok) throw new Error(result?.error || "Could not open settings");
+			settings.title = "Open settings";
+		}
+		catch (error) {
+			console.error("Routing Buddy settings:", error);
+			settings.title = "Could not open settings. Try the extension toolbar icon.";
+		}
+	});
 }
 
 function difficultySelector(level) {
@@ -140,36 +204,83 @@ function heatmapSportIsSelected(label) {
   return false;
 }
 
-function closeLayerSheetWhenAvailable() {
-  let closeAttempts = 0;
-  const closeTimer = window.setInterval(() => {
-    closeAttempts += 1;
-    const heading = [...document.querySelectorAll("p")].find((element) => element.textContent?.trim() === "Customize map");
-    const closeButton = heading?.parentElement?.querySelector('button[aria-label="Close"][aria-disabled="false"]');
-    if (closeButton) {
-      closeButton.click();
-      window.clearInterval(closeTimer);
-    } else if (closeAttempts >= 15) {
-      window.clearInterval(closeTimer);
-    }
-  }, 250);
+function hideRestorationSheets() {
+	const hidden = new Set();
+	function hideSheets() {
+		for (const heading of document.querySelectorAll("p")) {
+			if (!["Customize map", "Heatmap settings"].includes(heading.textContent?.trim())) continue;
+			let sheet = heading.parentElement;
+			while (sheet && sheet !== document.body && sheet !== document.documentElement) {
+				// Stop before the map or application root; hide only the sheet containing its controls.
+				if (sheet.querySelector("canvas")) break;
+				if (sheet.querySelector('button[aria-label="Close"]') &&
+					sheet.querySelector('img[alt="map layer"], input[type="radio"]')) {
+					sheet.classList.add("krb-restoration__sheet");
+					hidden.add(sheet);
+					break;
+				}
+				sheet = sheet.parentElement;
+			}
+		}
+	}
+	const observer = new MutationObserver(hideSheets);
+	observer.observe(document.documentElement, { childList: true, subtree: true });
+	hideSheets();
+	return function () {
+		observer.disconnect();
+		for (const sheet of hidden) sheet.classList.remove("krb-restoration__sheet");
+	};
+}
+
+function closeLayerSheetWhenAvailable(done) {
+	let closeAttempts = 0;
+	const closeTimer = window.setInterval(function () {
+		closeAttempts += 1;
+		const heading = [...document.querySelectorAll("p")].find((element) =>
+			["Customize map", "Heatmap settings"].includes(element.textContent?.trim()));
+		const closeButton = heading?.parentElement?.querySelector('button[aria-label="Close"][aria-disabled="false"]');
+		if (closeButton) {
+			closeButton.click();
+			window.clearInterval(closeTimer);
+			// Keep the closing animation hidden too.
+			window.setTimeout(done, 750);
+		}
+		else if (closeAttempts >= 15) {
+			window.clearInterval(closeTimer);
+			done();
+		}
+	}, 250);
 }
 
 async function restoreLayers(options) {
-  if (!options.rememberLayers || layersRestoredThisLoad) return;
+  if (!options.rememberLayers || layersRestoredThisLoad || restoringLayers) return;
   const layers = options.rememberedLayers || {};
   if (!Object.keys(layers).length) return;
   window.clearInterval(restoreTimer);
   restoringLayers = true;
+	const revealSheets = hideRestorationSheets();
+	let finishing = false;
+	const restorationDeadline = window.setTimeout(function () {
+		window.clearInterval(restoreTimer);
+		revealSheets();
+		restoringLayers = false;
+	}, 16000);
   let attempts = 0;
   let layerSheetOpened = false;
   let step = "heatmap";
   const finishRestore = () => {
-    restoringLayers = false;
-    window.clearInterval(restoreTimer);
+		if (finishing) return;
+		finishing = true;
+		window.clearInterval(restoreTimer);
+		closeLayerSheetWhenAvailable(function () {
+			window.clearTimeout(restorationDeadline);
+			revealSheets();
+			restoringLayers = false;
+		});
   };
   restoreTimer = window.setInterval(() => {
     attempts += 1;
+		if (attempts > 30) { finishRestore(); return; }
     const opener = findLayerMenuOpener();
     if (!opener) {
       if (attempts >= 30) finishRestore();
@@ -215,7 +326,6 @@ async function restoreLayers(options) {
       if (!layers.mapType) {
         layersRestoredThisLoad = true;
         finishRestore();
-        closeLayerSheetWhenAvailable();
         return;
       }
       const option = ensureLayerSheet("mapType");
@@ -223,7 +333,6 @@ async function restoreLayers(options) {
       if (!option.classList.contains("selected")) option.click();
       layersRestoredThisLoad = true;
       finishRestore();
-      closeLayerSheetWhenAvailable();
     } else if (attempts >= 30) {
       finishRestore();
     }

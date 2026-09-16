@@ -23,3 +23,28 @@
 .krb-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .krb-muted { opacity: .38; text-decoration: line-through; }
 .krb-avoid { color: #7a1016; }
+
+#krb-panel summary { cursor: grab; touch-action: none; user-select: none; gap: 6px; }
+#krb-panel summary:active { cursor: grabbing; }
+#krb-panel .krb-title { flex: 1; }
+.krb-panel__settings {
+	border: 0;
+	padding: 2px 4px;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 17px;
+	line-height: 1;
+	cursor: pointer;
+}
+.krb-panel__settings:hover { background: rgb(0 0 0 / 8%); }
+.krb-panel__settings:focus-visible { outline: 2px solid #1c9cc5; }
+
+/* Programmatic clicks still work while restoration sheets are invisible. */
+.krb-restoration__sheet,
+.krb-restoration__sheet * {
+	visibility: hidden !important;
+	animation: none !important;
+	transition: none !important;
+}
