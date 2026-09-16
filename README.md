@@ -6,7 +6,7 @@ A Manifest V3 browser extension that lets Komoot remember your map layer choices
 
 1. Open `chrome://extensions` (or `edge://extensions`).
 2. Turn on **Developer mode**.
-3. Choose **Load unpacked**, then select this folder: `J:\apps\komoot-routing-buddy`.
+3. Choose **Load unpacked**, then select this repository folder. In Brave, use `brave://extensions`.
 4. Open Komoot's Route Planner, enable Komoot's MTB layer, and use the extension toolbar button to set rules.
 
 Suggested defaults highlight S0–S2 and warn in dark red for S3–S5.
@@ -26,3 +26,11 @@ The extension styles difficulty-bearing SVG/DOM features exposed by the planner 
 - `planner.css` — planner panel styles
 
 No build system is required; load the folder directly as an unpacked extension.
+
+## Page scope
+
+The extension loads only on `https://www.komoot.com/tour/<id>/zoom` and `/tour/<id>/edit` (including query strings). Other Komoot pages do not load the content scripts or planner CSS.
+
+## Sidebar state
+
+The desktop left sidebar state is always remembered locally, independently of the layer setting. Clicking its arrow or pressing H saves the new state; the next zoom/edit page restores it. If Komoot changes the arrow markup, restoration safely skips it. Run sidebar tests with `node --test test/sidebar.test.cjs`.
