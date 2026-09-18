@@ -3,7 +3,7 @@
   z-index: 2147483647;
   top: 92px;
   right: 18px;
-  width: 188px;
+  width: 230px;
   overflow: hidden;
   border: 1px solid rgb(0 0 0 / 14%);
   border-radius: 10px;
@@ -48,3 +48,16 @@
 	animation: none !important;
 	transition: none !important;
 }
+
+.krb-panel__toggle {
+	border: 1px solid #65726a;
+	border-radius: 12px;
+	padding: 3px 7px;
+	background: #267b43;
+	color: white;
+	font: inherit;
+	cursor: pointer;
+}
+.krb-panel__toggle[aria-checked="false"] { background: #59615c; }
+.krb-panel__toggle:focus-visible { outline: 2px solid #1c9cc5; outline-offset: 2px; }
+.krb-panel--disabled .krb-legend { opacity: .4; }

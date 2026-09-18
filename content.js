@@ -18,7 +18,7 @@ function installMapBridge() {
 }
 
 function sendMapConfig(rules, options) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
 
 function createPanel() {
@@ -26,7 +26,7 @@ function createPanel() {
   const panel = document.createElement("details");
   panel.id = "krb-panel";
   panel.open = true;
-  panel.innerHTML = `<summary><span class="krb-title"></span><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
+  panel.innerHTML = `<summary><span class="krb-title"></span><button type="button" class="krb-panel__toggle" role="switch" aria-checked="true" aria-label="Trail visual changes" title="Toggle trail visual changes">On</button><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
   document.documentElement.append(panel);
 	setupPanelControls(panel);
 }
@@ -34,6 +34,23 @@ function createPanel() {
 function setupPanelControls(panel) {
 	const header = panel.querySelector("summary");
 	const settings = panel.querySelector(".krb-panel__settings");
+	const toggle = panel.querySelector(".krb-panel__toggle");
+	toggle.addEventListener("click", async function (event) {
+		event.preventDefault();
+		event.stopPropagation();
+		toggle.disabled = true;
+		try {
+			const options = await contentSettings.getOptions();
+			await chrome.storage.sync.set({ trailOptions: { ...options, visualsEnabled: options.visualsEnabled === false } });
+			await refresh(false);
+		}
+		catch (error) {
+			console.error("Routing Buddy could not toggle visuals:", error);
+		}
+		finally {
+			toggle.disabled = false;
+		}
+	});
 	let drag;
 	let suppressClick = false;
 
@@ -343,6 +360,13 @@ async function refresh(shouldRestore = false) {
   const [rules, options] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions()]);
   createPanel();
   renderLegend(rules, options.maximumTrailLevel);
+	const panel = document.querySelector("#krb-panel");
+	const enabled = options.visualsEnabled !== false;
+	const toggle = panel.querySelector(".krb-panel__toggle");
+	toggle.setAttribute("aria-checked", String(enabled));
+	toggle.textContent = enabled ? "On" : "Off";
+	panel.classList.toggle("krb-panel--disabled", !enabled);
+	if (!enabled) document.getElementById(STYLE_ID)?.remove();
   sendMapConfig(rules, options);
   if (shouldRestore) restoreLayers(options);
 }

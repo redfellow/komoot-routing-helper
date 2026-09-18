@@ -127,3 +127,7 @@ node --test test/sidebar.test.cjs
 ## Notes
 
 This project is intentionally lightweight and does not require a bundler or build step. Load the folder directly as an unpacked extension in Chromium-based browsers.
+
+## Toggle trail visuals
+
+Use the On/Off switch in the floating MTB panel to disable or enable trail visual changes. The preference is saved; switching off restores the original map filters and colours while keeping the panel, layer memory, and sidebar memory available. Run all tests with `node --test test/`.

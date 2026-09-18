@@ -11,6 +11,7 @@ const DEFAULT_RULES = {
 };
 
 const DEFAULT_OPTIONS = {
+	visualsEnabled: true,
   maximumTrailLevel: "S5",
   rememberLayers: false,
   rememberedLayers: {}

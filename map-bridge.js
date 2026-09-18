@@ -39,19 +39,36 @@
   }
   function apply() {
     if (!map || !config) return false;
+		if (config.visualsEnabled === false) {
+			for (const [id, original] of originals) {
+				if (!map.getLayer(id)) continue;
+				map.setFilter(id, original.filter ?? null);
+				map.setPaintProperty(id, original.colourProperty, original.colour ?? null);
+			}
+			originals.clear();
+			postStatus({ ready: true, enabled: false });
+			return true;
+		}
     const layers = mtbLayers(); const property = difficultyProperty(layers);
     if (!layers.length || !property) { postStatus({ ready: true, layers: layers.map((x) => x.id), property: null }); return false; }
     const max = Number(config.maximumTrailLevel.slice(1));
     const allowed = Array.from({ length: max + 1 }, (_, index) => `S${index}`);
     for (const layer of layers) {
-      if (!originals.has(layer.id)) originals.set(layer.id, { filter: map.getFilter(layer.id), paint: layer.paint });
+			const colourProperty = layer.type === "line" ? "line-color" : "fill-color";
+			if (!originals.has(layer.id)) originals.set(layer.id, {
+				filter: structuredClone(map.getFilter(layer.id)),
+				colourProperty,
+				colour: structuredClone(map.getPaintProperty(layer.id, colourProperty))
+			});
       const original = originals.get(layer.id).filter;
       map.setFilter(layer.id, original ? ["all", original, ["in", property, ...allowed]] : ["in", property, ...allowed]);
       const avoid = Object.entries(config.rules || {}).filter(([, mode]) => mode === "avoid").map(([level]) => level);
-      const colourProperty = layer.type === "line" ? "line-color" : "fill-color";
       if (avoid.length && map.getLayer(layer.id)?.paint?.[colourProperty] !== undefined) {
-        map.setPaintProperty(layer.id, colourProperty, ["match", ["get", property], ...avoid.flatMap((level) => [level, "#7a1016"]), map.getPaintProperty(layer.id, colourProperty)]);
+        map.setPaintProperty(layer.id, colourProperty, ["match", ["get", property], ...avoid.flatMap((level) => [level, "#7a1016"]), originals.get(layer.id).colour]);
       }
+			else {
+				map.setPaintProperty(layer.id, colourProperty, originals.get(layer.id).colour ?? null);
+			}
     }
     postStatus({ ready: true, layers: layers.map((x) => x.id), property });
     return true;
