@@ -26,6 +26,14 @@ const HIGHLIGHT_COLOURS = {
   S5: "#c01c28"
 };
 
+async function getColours() {
+	const saved = await chrome.storage.sync.get("trailColours");
+	return Object.fromEntries(LEVELS.map(function (level) {
+		const colour = saved.trailColours?.[level];
+		return [level, /^#[0-9a-f]{6}$/i.test(colour) ? colour : HIGHLIGHT_COLOURS[level]];
+	}));
+}
+
 async function getRules() {
   const saved = await chrome.storage.sync.get("trailRules");
   return { ...DEFAULT_RULES, ...(saved.trailRules || {}) };
@@ -51,6 +59,6 @@ async function getOptions() {
 
 // A classic-script namespace works in both the popup and MV3 content scripts.
 globalThis.KrbSettings = {
-  LEVELS, DEFAULT_RULES, DEFAULT_OPTIONS, HIGHLIGHT_COLOURS, getRules, getOptions
+  LEVELS, DEFAULT_RULES, DEFAULT_OPTIONS, HIGHLIGHT_COLOURS, getRules, getOptions, getColours
 };
 })();

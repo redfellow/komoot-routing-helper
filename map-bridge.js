@@ -118,7 +118,9 @@
 					const expression = ["match", level];
 					for (let index = 0; index <= 5; index++) {
 						const mode = config.rules[`S${index}`];
-						expression.push(index, mode === "avoid" ? "#7a1016" : mode === "off" ? base : colours[index]);
+						const custom = config.colours?.[`S${index}`];
+						const colour = /^#[0-9a-f]{6}$/i.test(custom) ? custom : colours[index];
+						expression.push(index, mode === "avoid" ? "#7a1016" : mode === "off" ? base : colour);
 					}
 					expression.push(base);
 					return expression;

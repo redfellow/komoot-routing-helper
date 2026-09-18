@@ -17,8 +17,8 @@ function installMapBridge() {
   (document.head || document.documentElement).append(script);
 }
 
-function sendMapConfig(rules, options) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+function sendMapConfig(rules, options, colours) {
+  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
 
 function createPanel() {
@@ -135,7 +135,7 @@ function applyTrailStyles(rules, maximumTrailLevel) {
   // The page-world bridge applies the equivalent rules to MapLibre layers.
 }
 
-function renderLegend(rules, maximumTrailLevel) {
+function renderLegend(rules, maximumTrailLevel, colours) {
   const legend = document.querySelector("#krb-panel .krb-legend");
   if (!legend) return;
   legend.replaceChildren(...contentSettings.LEVELS.map((level) => {
@@ -144,7 +144,7 @@ function renderLegend(rules, maximumTrailLevel) {
     item.className = `krb-level ${mode === "off" ? "krb-muted" : ""} ${mode === "avoid" ? "krb-avoid" : ""}`;
     const dot = document.createElement("span");
     dot.className = "krb-dot";
-    dot.style.background = mode === "avoid" ? AVOID_COLOUR : contentSettings.HIGHLIGHT_COLOURS[level];
+    dot.style.background = mode === "avoid" ? AVOID_COLOUR : colours[level];
     item.append(dot, document.createTextNode(level));
     return item;
   }));
@@ -357,9 +357,9 @@ async function restoreLayers(options) {
 }
 
 async function refresh(shouldRestore = false) {
-  const [rules, options] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions()]);
+  const [rules, options, colours] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions(), contentSettings.getColours()]);
   createPanel();
-  renderLegend(rules, options.maximumTrailLevel);
+  renderLegend(rules, options.maximumTrailLevel, colours);
 	const panel = document.querySelector("#krb-panel");
 	const enabled = options.visualsEnabled !== false;
 	const toggle = panel.querySelector(".krb-panel__toggle");
@@ -367,12 +367,12 @@ async function refresh(shouldRestore = false) {
 	toggle.textContent = enabled ? "On" : "Off";
 	panel.classList.toggle("krb-panel--disabled", !enabled);
 	if (!enabled) document.getElementById(STYLE_ID)?.remove();
-  sendMapConfig(rules, options);
+  sendMapConfig(rules, options, colours);
   if (shouldRestore) restoreLayers(options);
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && (changes.trailRules || changes.trailOptions)) refresh(false);
+  if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours)) refresh(false);
 });
 
 document.addEventListener("click", rememberLayerClick, true);

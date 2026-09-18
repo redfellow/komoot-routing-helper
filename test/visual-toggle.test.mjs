@@ -145,3 +145,30 @@ test("visuals default to enabled and saved disabled preference survives option l
 	assert.equal(options.visualsEnabled, false);
 	assert.equal(options.rememberLayers, true);
 });
+
+test("custom colours update live strokes and labels while avoid keeps its warning colour", function () {
+	const f = fixture();
+	f.configure({ colours: { S0: "#abcdef", S1: "#ffffff" } });
+	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#abcdef");
+	assert.equal(evaluate(f.layers[2].paint["text-color"], { mtb_scale: "0" }), "#abcdef");
+	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "1" }), "#7a1016");
+	f.configure({ colours: { S0: "#123abc" } });
+	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#123abc");
+	f.configure({ colours: { S0: "invalid" } });
+	assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#26a269");
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(f.layers[0], f.original);
+});
+
+test("saved colours merge with defaults and invalid values fall back safely", async function () {
+	let saved = {};
+	const context = { chrome: { storage: { sync: { async get() { return saved; } } } } };
+	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), context);
+	assert.deepEqual(copy(await context.KrbSettings.getColours()), copy(context.KrbSettings.HIGHLIGHT_COLOURS));
+	saved = { trailColours: { S0: "#ABCDEF", S1: "red", S2: null } };
+	const colours = await context.KrbSettings.getColours();
+	assert.equal(colours.S0, "#ABCDEF");
+	assert.equal(colours.S1, "#1c9cc5");
+	assert.equal(colours.S2, "#6c63ff");
+	assert.equal(colours.S5, "#c01c28");
+});
