@@ -8,7 +8,7 @@
 	let saveTimer;
 
 	function readSidebar() {
-		for (const path of document.querySelectorAll('[placement="right"] button svg path')) {
+		for (const path of document.querySelectorAll('button svg[viewBox="0 0 24 24"] path')) {
 			const shape = path.getAttribute("d");
 			if (Object.hasOwn(arrows, shape)) {
 				return { button: path.closest("button"), open: arrows[shape] };
@@ -29,7 +29,7 @@
 			catch (error) {
 				console.error("Routing Buddy could not save sidebar state:", error);
 			}
-		}, 400);
+		}, 0);
 	}
 
 	document.addEventListener("click", function (event) {

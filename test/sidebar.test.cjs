@@ -18,7 +18,10 @@ async function setup(saved, initial = true) {
 	};
 	vm.runInNewContext(source, {
 		location: { pathname: "/tour/123/zoom" }, console,
-		document: { querySelectorAll() { return [path]; }, addEventListener(name, fn) { events[name] = fn; } },
+		document: { querySelectorAll(selector) {
+				// Real sidebar buttons have no tooltip placement attribute until hovered.
+				return selector === 'button svg[viewBox="0 0 24 24"] path' ? [path] : [];
+			}, addEventListener(name, fn) { events[name] = fn; } },
 		window: { setInterval(fn) { tick = fn; }, clearInterval() { tick = undefined; }, setTimeout(fn) { save = fn; }, clearTimeout() {} },
 		chrome: { storage: { local: { async get() { return { sidebarOpen: saved }; }, async set(value) { writes.push(value.sidebarOpen); } } } }
 	});
