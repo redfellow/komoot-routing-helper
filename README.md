@@ -82,9 +82,9 @@ This project is still a lightweight helper, and a few rough edges remain.
 
 Several parts of the code rely on specific DOM structure, button labels, SVG paths, or image sources. If Komoot updates the planner UI, the layer restore or sidebar restore logic may need small adjustments.
 
-### 2. MapLibre styling is limited by the underlying render model
+### 2. Trail styling depends on Komoot’s MapLibre layers
 
-Komoot renders terrain using MapLibre/WebGL. Ordinary page CSS cannot reliably recolour individual trail pixels, so the extension uses a bridge script to inspect and apply rule-based display changes where possible. This is safer than trying to override route engine behaviour, but it is still a narrow compatibility layer rather than a full graphics rewrite.
+The bridge discovers the live map through the map canvas’s React ancestors and styles STS trail strokes and labels using Komoot’s `mtb_scale` values, including `+` and `-` variants. It preserves native access filters and zoom fading, and reapplies rules when style layers are replaced. IMBA layers and base paths are left alone, so hiding an STS overlay does not remove the underlying path. Komoot changes to its map internals may require adapter updates.
 
 ### 3. Some settings are intentionally skipped rather than guessed
 
@@ -100,9 +100,9 @@ The extension does not:
 
 The “avoid” mode is a warning layer only.
 
-### 5. No broader automated suite yet
+### 5. Automated coverage and live checks
 
-The repo currently includes a focused sidebar test file, but the full extension does not have a broad browser automation suite or build pipeline beyond that test. The main validation path is still manual browser testing against real Komoot planner pages.
+The Node tests cover sidebar persistence, trail difficulty values, highlight/avoid/dimming rules, maximum-level filtering, restoring native paint, and replacement style layers. Live Brave checks on the test route confirmed that changing S0 from highlight to avoid updates the trail strokes and labels immediately, and that disabling visuals shows the native styling. These browser checks remain manual.
 
 ## Project layout
 
@@ -118,10 +118,10 @@ The repo currently includes a focused sidebar test file, but the full extension 
 
 ## Testing
 
-Run the sidebar test directly with:
+Run all regression tests with:
 
 ```bash
-node --test test/sidebar.test.cjs
+node --test test/
 ```
 
 ## Notes

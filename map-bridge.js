@@ -1,83 +1,182 @@
-(() => {
-  const originals = new Map();
-  let map;
-  let config;
-  let retryTimer;
+(function () {
+	const originals = new Map();
+	const colours = ["#26a269", "#1c9cc5", "#6c63ff", "#f6a609", "#e66b2e", "#c01c28"];
+	let map;
+	let config;
+	let scheduled;
+	let applying = false;
+	let searchAttempts = 0;
 
-  const isMapLibre = (value) => Boolean(value && value._mapId && typeof value.getLayer === "function" && typeof value.getStyle === "function");
-  const reserved = new Set(["self", "parent", "window", "globalThis", "top", "frames", "prototype", "constructor", "caller", "callee", "arguments", "localStorage"]);
-  function findMapIn(value, limit = 5000) {
-    const seen = new Set(); const queue = [value]; let visited = 0;
-    while (queue.length && visited++ < limit) {
-      const item = queue.shift();
-      if (!item || seen.has(item)) continue;
-      if (isMapLibre(item) && document.contains(item.getCanvas())) return item;
-      seen.add(item);
-      try { for (const key of Object.getOwnPropertyNames(item)) if (!reserved.has(key)) queue.push(item[key]); } catch (error) { if (error.name !== "SecurityError") throw error; }
-    }
-    return null;
-  }
-  function findMap() {
-    for (const element of document.querySelectorAll("*")) {
-      for (const key of Object.getOwnPropertyNames(element)) {
-        if (!key.startsWith("__reactFiber$") && !key.startsWith("__reactInternalInstance$")) continue;
-        const found = findMapIn(element[key]);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-  function mtbLayers() {
-    return (map?.getStyle()?.layers || []).filter((layer) => /mtb|singletrail|trail.?scale|difficulty/i.test(JSON.stringify(layer)) && (layer.type === "line" || layer.type === "fill"));
-  }
-  function difficultyProperty(layers) {
-    const candidates = ["mtb:scale", "mtb_scale", "mtbScale", "trail_difficulty", "difficulty"];
-    const text = JSON.stringify(layers);
-    return candidates.find((key) => text.includes(key)) || candidates.find((key) => {
-      try { return map.queryRenderedFeatures({ layers: layers.map((layer) => layer.id) }).some((feature) => key in feature.properties); } catch { return false; }
-    });
-  }
-  function apply() {
-    if (!map || !config) return false;
-		if (config.visualsEnabled === false) {
-			for (const [id, original] of originals) {
-				if (!map.getLayer(id)) continue;
-				map.setFilter(id, original.filter ?? null);
-				map.setPaintProperty(id, original.colourProperty, original.colour ?? null);
+	function isMap(value) {
+		return value && typeof value.getStyle === "function" && typeof value.getCanvas === "function" &&
+			typeof value.setPaintProperty === "function" && document.contains(value.getCanvas());
+	}
+
+	function findMap() {
+		const queue = [];
+		for (const canvas of document.querySelectorAll("canvas.maplibregl-canvas, canvas.mapboxgl-canvas")) {
+			for (let element = canvas; element; element = element.parentElement) {
+				for (const key of Object.getOwnPropertyNames(element)) {
+					if (key.startsWith("__reactFiber$") || key.startsWith("__reactProps$")) queue.push(element[key]);
+				}
 			}
-			originals.clear();
-			postStatus({ ready: true, enabled: false });
-			return true;
 		}
-    const layers = mtbLayers(); const property = difficultyProperty(layers);
-    if (!layers.length || !property) { postStatus({ ready: true, layers: layers.map((x) => x.id), property: null }); return false; }
-    const max = Number(config.maximumTrailLevel.slice(1));
-    const allowed = Array.from({ length: max + 1 }, (_, index) => `S${index}`);
-    for (const layer of layers) {
-			const colourProperty = layer.type === "line" ? "line-color" : "fill-color";
-			if (!originals.has(layer.id)) originals.set(layer.id, {
-				filter: structuredClone(map.getFilter(layer.id)),
-				colourProperty,
-				colour: structuredClone(map.getPaintProperty(layer.id, colourProperty))
-			});
-      const original = originals.get(layer.id).filter;
-      map.setFilter(layer.id, original ? ["all", original, ["in", property, ...allowed]] : ["in", property, ...allowed]);
-      const avoid = Object.entries(config.rules || {}).filter(([, mode]) => mode === "avoid").map(([level]) => level);
-      if (avoid.length && map.getLayer(layer.id)?.paint?.[colourProperty] !== undefined) {
-        map.setPaintProperty(layer.id, colourProperty, ["match", ["get", property], ...avoid.flatMap((level) => [level, "#7a1016"]), originals.get(layer.id).colour]);
-      }
-			else {
-				map.setPaintProperty(layer.id, colourProperty, originals.get(layer.id).colour ?? null);
+		const seen = new Set();
+		for (let index = 0; index < queue.length && index < 100000; index++) {
+			const value = queue[index];
+			if (!value || typeof value !== "object" || seen.has(value) || value instanceof Node || value === window) continue;
+			seen.add(value);
+			if (isMap(value)) return value;
+			// Read data descriptors only: never invoke arbitrary React/browser getters.
+			for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) {
+				if (descriptor.value && typeof descriptor.value === "object" && queue.length < 100000) queue.push(descriptor.value);
 			}
-    }
-    postStatus({ ready: true, layers: layers.map((x) => x.id), property });
-    return true;
-  }
-  function postStatus(detail) { window.postMessage({ type: "KRB_MAP_STATUS", detail }, location.origin); }
-  function startApplyRetry() {
-    clearInterval(retryTimer);
-    retryTimer = setInterval(() => { if (apply()) clearInterval(retryTimer); }, 600);
-  }
-  window.addEventListener("message", (event) => { if (event.source === window && event.data?.type === "KRB_MAP_CONFIG") { config = event.data.config; startApplyRetry(); } });
-  const finder = setInterval(() => { if (!map) map = findMap(); if (map) { clearInterval(finder); postStatus({ ready: true }); startApplyRetry(); } }, 500);
+		}
+		return null;
+	}
+
+	function levelExpression() {
+		const value = ["to-string", ["get", "mtb_scale"]];
+		const expression = ["match", value];
+		for (let level = 0; level <= 5; level++) {
+			expression.push([String(level), `${level}+`, `${level}-`, `S${level}`, `s${level}`], level);
+		}
+		expression.push(-1);
+		return expression;
+	}
+
+	// Keep zoom at the top level, as required by MapLibre's expression grammar.
+	function transformStops(value, transform, fallback) {
+		if (value && !Array.isArray(value) && Array.isArray(value.stops) && !value.property) {
+			const result = ["interpolate", ["exponential", value.base ?? 1], ["zoom"]];
+			for (const [zoom, output] of value.stops) result.push(zoom, transform(output));
+			return result;
+		}
+		if (Array.isArray(value) && value[0] === "interpolate" && value[2]?.[0] === "zoom") {
+			return value.map((entry, index) => index >= 4 && index % 2 === 0 ? transform(entry) : entry);
+		}
+		if (Array.isArray(value) && value[0] === "step" && value[1]?.[0] === "zoom") {
+			return value.map((entry, index) => index >= 2 && index % 2 === 0 ? transform(entry) : entry);
+		}
+		return transform(value ?? fallback);
+	}
+
+	function same(left, right) {
+		return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+	}
+
+	function setFilter(id, value) {
+		if (!same(map.getFilter(id), value)) map.setFilter(id, value ?? null);
+	}
+
+	function setPaint(id, property, value) {
+		if (!same(map.getPaintProperty(id, property), value)) map.setPaintProperty(id, property, value ?? null);
+	}
+
+	function restore() {
+		for (const [id, original] of originals) {
+			if (map.getLayer(id) !== original.layer) continue;
+			setFilter(id, original.filter);
+			for (const [property, value] of Object.entries(original.paint)) setPaint(id, property, value);
+		}
+		originals.clear();
+	}
+
+	function apply() {
+		if (!map || !config || applying) return;
+		applying = true;
+		try {
+			if (config.visualsEnabled === false) {
+				restore();
+				postStatus({ ready: true, enabled: false });
+				return;
+			}
+			const layers = (map.getStyle()?.layers || []).filter((layer) =>
+				/mtb/i.test(layer.id) && ["line", "symbol"].includes(layer.type) &&
+				JSON.stringify([layer.filter, layer.layout]).includes('"mtb_scale"'));
+			const level = levelExpression();
+			const max = Number(config.maximumTrailLevel.slice(1));
+			const applied = [];
+			for (const layer of layers) {
+				const liveLayer = map.getLayer(layer.id);
+				const colourProperty = layer.type === "line" ? "line-color" : "text-color";
+				const opacityProperty = layer.type === "line" ? "line-opacity" : "text-opacity";
+				if (!originals.has(layer.id) || originals.get(layer.id).layer !== liveLayer) {
+					originals.set(layer.id, {
+						layer: liveLayer,
+						filter: structuredClone(map.getFilter(layer.id)),
+						paint: {
+							[colourProperty]: structuredClone(map.getPaintProperty(layer.id, colourProperty)),
+							[opacityProperty]: structuredClone(map.getPaintProperty(layer.id, opacityProperty))
+						}
+					});
+				}
+				const original = originals.get(layer.id);
+				const allowed = ["any", ["==", level, -1], ["<=", level, max]];
+				setFilter(layer.id, original.filter ? ["all", original.filter, allowed] : allowed);
+				const colour = transformStops(original.paint[colourProperty], function (base) {
+					const expression = ["match", level];
+					for (let index = 0; index <= 5; index++) {
+						const mode = config.rules[`S${index}`];
+						expression.push(index, mode === "avoid" ? "#7a1016" : mode === "off" ? base : colours[index]);
+					}
+					expression.push(base);
+					return expression;
+				}, "#000000");
+				const opacity = transformStops(original.paint[opacityProperty], function (base) {
+					const expression = ["match", level];
+					for (let index = 0; index <= 5; index++) expression.push(index, config.rules[`S${index}`] === "off" ? 0.2 : 1);
+					expression.push(1);
+					return ["*", base, expression];
+				}, 1);
+				setPaint(layer.id, colourProperty, colour);
+				setPaint(layer.id, opacityProperty, opacity);
+				applied.push(layer.id);
+			}
+			postStatus({ ready: true, enabled: true, layers: applied });
+		}
+		catch (error) {
+			console.error("Routing Buddy map styling failed:", error);
+			postStatus({ ready: true, error: error.message });
+		}
+		finally {
+			applying = false;
+		}
+	}
+
+	function postStatus(detail) {
+		window.postMessage({ type: "KRB_MAP_STATUS", detail }, location.origin);
+	}
+
+	function scheduleApply() {
+		if (applying || scheduled) return;
+		scheduled = setTimeout(function () { scheduled = undefined; apply(); }, 50);
+	}
+
+	window.addEventListener("message", function (event) {
+		if (event.source !== window || event.origin !== location.origin || event.data?.type !== "KRB_MAP_CONFIG") return;
+		const incoming = event.data.config;
+		if (!incoming || !/^S[0-5]$/.test(incoming.maximumTrailLevel) || !incoming.rules) return;
+		config = incoming;
+		searchAttempts = 0;
+		scheduleApply();
+	});
+
+	setInterval(function () {
+		if (map && !document.contains(map.getCanvas())) {
+			map.off("styledata", scheduleApply);
+			map.off("idle", scheduleApply);
+			map = undefined;
+			originals.clear();
+			searchAttempts = 0;
+		}
+		if (map || ++searchAttempts > 30) return;
+		const found = findMap();
+		if (!found) return;
+		map = found;
+		map.on("styledata", scheduleApply);
+		map.on("idle", scheduleApply);
+		postStatus({ ready: true });
+		scheduleApply();
+	}, 1000);
 })();
