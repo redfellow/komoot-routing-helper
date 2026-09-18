@@ -8,7 +8,11 @@
 	],
 	"action": {
 		"default_title": "Komoot Routing Buddy",
-		"default_popup": "popup.html"
+		"default_popup": "popup.html",
+		"default_icon": {
+			"16": "icon-rounded.png",
+			"32": "icon-rounded.png"
+		}
 	},
 	"content_scripts": [
 		{
@@ -41,5 +45,11 @@
 	],
 	"background": {
 		"service_worker": "background.js"
+	},
+	"icons": {
+		"16": "icon-rounded.png",
+		"32": "icon-rounded.png",
+		"48": "icon-rounded.png",
+		"128": "icon-rounded.png"
 	}
 }
