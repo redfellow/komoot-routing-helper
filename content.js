@@ -21,17 +21,17 @@ function sendMapConfig(rules, options, colours) {
   window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
 
-function createPanel() {
+function createPanel(state) {
   if (document.querySelector("#krb-panel")) return;
   const panel = document.createElement("details");
   panel.id = "krb-panel";
-  panel.open = true;
+  panel.open = state?.open !== false;
   panel.innerHTML = `<summary><span class="krb-title"></span><button type="button" class="krb-panel__toggle" role="switch" aria-checked="true" aria-label="Trail visual changes" title="Toggle trail visual changes">On</button><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
   document.documentElement.append(panel);
-	setupPanelControls(panel);
+	setupPanelControls(panel, state || {});
 }
 
-function setupPanelControls(panel) {
+function setupPanelControls(panel, state = {}) {
 	const header = panel.querySelector("summary");
 	const settings = panel.querySelector(".krb-panel__settings");
 	const toggle = panel.querySelector(".krb-panel__toggle");
@@ -41,7 +41,7 @@ function setupPanelControls(panel) {
 		toggle.disabled = true;
 		try {
 			const options = await contentSettings.getOptions();
-			await chrome.storage.sync.set({ trailOptions: { ...options, visualsEnabled: options.visualsEnabled === false } });
+			await chrome.storage.sync.set({ trailVisualsEnabled: options.visualsEnabled === false });
 			await refresh(false);
 		}
 		catch (error) {
@@ -60,6 +60,21 @@ function setupPanelControls(panel) {
 		panel.style.top = `${Math.max(0, Math.min(top, window.innerHeight - panel.offsetHeight))}px`;
 	}
 
+	let lastOpen = panel.open;
+	let position = state.position;
+	let pendingSave = Promise.resolve();
+	function savePanelState() {
+		const panelState = { open: panel.open, position };
+		pendingSave = pendingSave.then(function () {
+			return chrome.storage.local.set({ panelState });
+		}).catch(function (error) {
+			console.error("Routing Buddy could not save panel state:", error);
+		});
+	}
+	if (Number.isFinite(position?.left) && Number.isFinite(position?.top)) {
+		movePanel(position.left, position.top);
+	}
+
 	header.addEventListener("pointerdown", function (event) {
 		if (event.button !== 0 || event.target.closest("button")) return;
 		const rect = panel.getBoundingClientRect();
@@ -76,6 +91,11 @@ function setupPanelControls(panel) {
 		movePanel(drag.left + dx, drag.top + dy);
 	});
 	function finishDrag() {
+		if (drag && suppressClick) {
+			const rect = panel.getBoundingClientRect();
+			position = { left: rect.left, top: rect.top };
+			savePanelState();
+		}
 		drag = undefined;
 	}
 	header.addEventListener("pointerup", finishDrag);
@@ -92,6 +112,10 @@ function setupPanelControls(panel) {
 		movePanel(rect.left, rect.top);
 	});
 	panel.addEventListener("toggle", function () {
+		if (panel.open !== lastOpen) {
+			lastOpen = panel.open;
+			savePanelState();
+		}
 		const rect = panel.getBoundingClientRect();
 		movePanel(rect.left, rect.top);
 	});
@@ -358,7 +382,8 @@ async function restoreLayers(options) {
 
 async function refresh(shouldRestore = false) {
   const [rules, options, colours] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions(), contentSettings.getColours()]);
-  createPanel();
+  const { panelState } = await chrome.storage.local.get("panelState");
+  createPanel(panelState);
   renderLegend(rules, options.maximumTrailLevel, colours);
 	const panel = document.querySelector("#krb-panel");
 	const enabled = options.visualsEnabled !== false;
@@ -372,7 +397,7 @@ async function refresh(shouldRestore = false) {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours)) refresh(false);
+  if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours || changes.trailVisualsEnabled)) refresh(false);
 });
 
 document.addEventListener("click", rememberLayerClick, true);

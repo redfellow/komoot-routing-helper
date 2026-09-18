@@ -4,7 +4,7 @@ A Manifest V3 browser extension for Komoot that makes MTB singletrail difficulty
 
 ## What it does
 
-- Adds a floating planner panel with an always-visible legend for S0–S5.
+- Adds a floating planner panel with a legend for S0–S5. Its expanded/collapsed state and dragged position are remembered locally.
 - Lets you set a maximum trail level to display.
 - Lets you customise each level’s highlight colour with a saved colour picker. The map and legend update automatically; avoid warnings stay dark red.
 - Lets you choose for each level whether it is:
@@ -131,4 +131,4 @@ This project is intentionally lightweight and does not require a bundler or buil
 
 ## Toggle trail visuals
 
-Use the On/Off switch in the floating MTB panel to disable or enable trail visual changes. The preference is saved; switching off restores the original map filters and colours while keeping the panel, layer memory, and sidebar memory available. Run all tests with `node --test test/`.
+Use the On/Off switch in the floating MTB panel to disable or enable trail visual changes. The preference is saved separately from other map options; switching off restores the original map filters and colours while keeping the panel, layer memory, and sidebar memory available. Run all tests with `node --test test/`.

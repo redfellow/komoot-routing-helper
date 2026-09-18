@@ -40,8 +40,9 @@ async function getRules() {
 }
 
 async function getOptions() {
-  const saved = await chrome.storage.sync.get("trailOptions");
+  const saved = await chrome.storage.sync.get(["trailOptions", "trailVisualsEnabled"]);
   const options = { ...DEFAULT_OPTIONS, ...(saved.trailOptions || {}) };
+	if (typeof saved.trailVisualsEnabled === "boolean") options.visualsEnabled = saved.trailVisualsEnabled;
   // Version 0.1 stored a { label, selector } object. Keep existing users' choices valid.
   options.rememberedLayers = Object.fromEntries(Object.entries(options.rememberedLayers || {})
     .map(([kind, value]) => [kind, typeof value === "string" ? value : value?.label])
