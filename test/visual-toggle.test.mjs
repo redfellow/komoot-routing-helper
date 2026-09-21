@@ -95,7 +95,7 @@ test("real mtb_scale values select highlight, warning and dimming without touchi
 	assert.ok(Math.abs(evaluate(opacity[4], { mtb_scale: "2" }) - 0.14) < 1e-10);
 	assert.equal(evaluate(opacity[6], { mtb_scale: "0" }), 0);
 	assert.deepEqual(f.layers[1].paint, {});
-	assert.equal(evaluate(f.layers[2].paint["text-color"], { mtb_scale: "0" }), "#26a269");
+	assert.match(evaluate(f.layers[2].paint["text-color"], { mtb_scale: "0" }), /^#[0-9a-f]{6}$/);
 });
 
 test("maximum difficulty preserves native access restrictions and unknown values", function () {
@@ -171,4 +171,37 @@ test("saved colours merge with defaults and invalid values fall back safely", as
 	assert.equal(colours.S1, "#1c9cc5");
 	assert.equal(colours.S2, "#6c63ff");
 	assert.equal(colours.S5, "#c01c28");
+});
+
+
+test("labels contrast with their halo while line colours remain unchanged; Off restores halo", function () {
+	const f = fixture();
+	const originalPaint = { "text-halo-color": "#eeeeee", "text-halo-width": 0.5, "text-halo-blur": 0.2 };
+	Object.assign(f.layers[2].paint, originalPaint);
+	for (const colour of ["#ffffff", "#ffff00", "#26a269", "#7a1016", "#000000"]) {
+		f.configure({ colours: { S0: colour } });
+		const properties = { mtb_scale: "0" };
+		const paint = f.layers[2].paint;
+		const text = evaluate(paint["text-color"], properties);
+		const rgb = [1, 3, 5].map(function (offset) {
+			const c = parseInt(text.slice(offset, offset + 2), 16) / 255;
+			return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+		});
+		assert.ok((0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2] + 0.05) / 0.05 >= 7);
+		for (const offset of [1, 3, 5]) {
+			assert.ok(parseInt(text.slice(offset, offset + 2), 16) >= parseInt(colour.slice(offset, offset + 2), 16));
+		}
+		if (colour === "#7a1016") {
+			assert.notEqual(text, colour);
+			assert.ok(parseInt(text.slice(1, 3), 16) > parseInt(text.slice(3, 5), 16));
+		}
+		assert.notEqual(evaluate(paint["text-color"], { mtb_scale: "1" }), "#7a1016");
+		assert.equal(evaluate(paint["text-halo-color"], properties), "#000000");
+		assert.equal(evaluate(paint["text-halo-width"], properties), 0.5);
+		assert.equal(evaluate(f.layers[0].paint["line-color"], properties), colour);
+		assert.equal(evaluate(paint["text-halo-width"], { mtb_scale: "2" }), 0.5);
+		assert.equal(evaluate(paint["text-halo-width"], { mtb_scale: "unknown" }), 0.5);
+	}
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(f.layers[2].paint, originalPaint);
 });

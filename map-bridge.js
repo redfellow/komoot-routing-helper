@@ -7,6 +7,22 @@
 	let applying = false;
 	let searchAttempts = 0;
 
+	// Contrast is measured against a controlled black halo, not unpredictable map pixels.
+	function labelColour(hex) {
+		const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+		function contrast(rgb) {
+			const linear = rgb.map(function (channel) {
+				const value = channel / 255;
+				return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+			});
+			return (0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2] + 0.05) / 0.05;
+		}
+		let adjusted = channels;
+		// Mix toward white to brighten dark colours while retaining their colour family.
+		while (contrast(adjusted) < 7) adjusted = adjusted.map((channel) => Math.ceil(channel + (255 - channel) * 0.05));
+		return "#" + adjusted.map((channel) => channel.toString(16).padStart(2, "0")).join("");
+	}
+
 	function isMap(value) {
 		return value && typeof value.getStyle === "function" && typeof value.getCanvas === "function" &&
 			typeof value.setPaintProperty === "function" && document.contains(value.getCanvas());
@@ -112,6 +128,11 @@
 					});
 				}
 				const original = originals.get(layer.id);
+				if (layer.type === "symbol" && !("text-halo-color" in original.paint)) {
+					for (const property of ["text-halo-color", "text-halo-width", "text-halo-blur"]) {
+						original.paint[property] = structuredClone(map.getPaintProperty(layer.id, property));
+					}
+				}
 				const allowed = ["any", ["==", level, -1], ["<=", level, max]];
 				setFilter(layer.id, original.filter ? ["all", original.filter, allowed] : allowed);
 				const colour = transformStops(original.paint[colourProperty], function (base) {
@@ -120,7 +141,8 @@
 						const mode = config.rules[`S${index}`];
 						const custom = config.colours?.[`S${index}`];
 						const colour = /^#[0-9a-f]{6}$/i.test(custom) ? custom : colours[index];
-						expression.push(index, mode === "avoid" ? "#7a1016" : mode === "off" ? base : colour);
+						const selected = mode === "avoid" ? "#7a1016" : colour;
+						expression.push(index, mode === "off" ? base : layer.type === "symbol" ? labelColour(selected) : selected);
 					}
 					expression.push(base);
 					return expression;
@@ -133,6 +155,20 @@
 				}, 1);
 				setPaint(layer.id, colourProperty, colour);
 				setPaint(layer.id, opacityProperty, opacity);
+				if (layer.type === "symbol") {
+					for (const [property, value, fallback] of [
+						["text-halo-color", "#000000", "rgba(0,0,0,0)"],
+						["text-halo-width", 0.5, 0],
+						["text-halo-blur", 0, 0]
+					]) {
+						setPaint(layer.id, property, transformStops(original.paint[property], function (base) {
+							const expression = ["match", level];
+							for (let index = 0; index <= 5; index++) expression.push(index, config.rules[`S${index}`] === "off" ? base : value);
+							expression.push(base);
+							return expression;
+						}, fallback));
+					}
+				}
 				applied.push(layer.id);
 			}
 			postStatus({ ready: true, enabled: true, layers: applied });
