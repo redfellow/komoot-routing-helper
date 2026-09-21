@@ -28,7 +28,7 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 
 ### Chrome / Brave
 
-1. Build the extension from source or use a packaged release build.
+1. Download the latest version from the [Releases page](https://github.com/redfellow/komoot-routing-helper/releases) (or build from source)
 2. Open `chrome://extensions` or `brave://extensions`.
 3. Enable Developer mode.
 4. Click Load unpacked and select the generated extension directory.
@@ -36,7 +36,7 @@ It adds visual cues directly to the map so difficult sections stand out at a gla
 
 ### Firefox
 
-1. Build the extension from source or use a packaged release build.
+1. Download the latest version from the [Releases page](https://github.com/redfellow/komoot-routing-helper/releases) (or build from source
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Click Load Temporary Add-on.
 4. Select the generated `manifest.json` for the Firefox build.
