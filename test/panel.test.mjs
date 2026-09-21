@@ -21,7 +21,7 @@ function mount(state = {}) {
 	});
 	const context = {
 		console, window: { innerWidth: 1000, innerHeight: 700, addEventListener() {} },
-		chrome: { storage: { local: { async set(value) { saved.push(structuredClone(value.panelState)); } } } }
+		KrbBrowser: { storage: { local: { async set(value) { saved.push(structuredClone(value.panelState)); } } } }
 	};
 	runInNewContext(controls, context);
 	context.setupPanelControls(panel, state);
@@ -61,7 +61,7 @@ test("drag saves once and restores within a smaller viewport", async function ()
 
 test("On/Off survives other option writes and falls back to the legacy preference", async function () {
 	let saved = { trailOptions: { visualsEnabled: false } };
-	const context = { chrome: { storage: { sync: { async get() { return saved; } } } } };
+	const context = { KrbBrowser: { storage: { sync: { async get() { return saved; } } } } };
 	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), context);
 	assert.equal((await context.KrbSettings.getOptions()).visualsEnabled, false);
 	saved = { trailVisualsEnabled: false, trailOptions: { visualsEnabled: true, maximumTrailLevel: "S2" } };

@@ -9,7 +9,7 @@
   <body>
     <main>
       <h1>Komoot Routing Buddy</h1>
-      <p class="intro">Choose how each singletrail scale is shown in the Route Planner. Use the colour swatches to customise highlight colours.</p>
+      <p class="intro">Choose how each singletrail scale is shown in the Route Planner. Use the colour swatches to customise highlight colours. Drag the colour sliders to preview changes on the map. Changes save automatically; select Done when finished.</p>
       <label class="setting" for="maximumLevel">
         <span>Maximum trail level to show</span>
         <select id="maximumLevel">
@@ -28,6 +28,7 @@
       <button id="restore" type="button">Restore suggested rules</button>
       <p id="status" role="status" aria-live="polite"></p>
     </main>
+    <script src="browser-api.js"></script>
     <script src="settings.js"></script>
     <script src="popup.js"></script>
   </body>

@@ -27,7 +27,7 @@ const HIGHLIGHT_COLOURS = {
 };
 
 async function getColours() {
-	const saved = await chrome.storage.sync.get("trailColours");
+	const saved = await globalThis.KrbBrowser.storage.sync.get("trailColours");
 	return Object.fromEntries(LEVELS.map(function (level) {
 		const colour = saved.trailColours?.[level];
 		return [level, /^#[0-9a-f]{6}$/i.test(colour) ? colour : HIGHLIGHT_COLOURS[level]];
@@ -35,12 +35,12 @@ async function getColours() {
 }
 
 async function getRules() {
-  const saved = await chrome.storage.sync.get("trailRules");
+  const saved = await globalThis.KrbBrowser.storage.sync.get("trailRules");
   return { ...DEFAULT_RULES, ...(saved.trailRules || {}) };
 }
 
 async function getOptions() {
-  const saved = await chrome.storage.sync.get(["trailOptions", "trailVisualsEnabled"]);
+  const saved = await globalThis.KrbBrowser.storage.sync.get(["trailOptions", "trailVisualsEnabled"]);
   const options = { ...DEFAULT_OPTIONS, ...(saved.trailOptions || {}) };
 	if (typeof saved.trailVisualsEnabled === "boolean") options.visualsEnabled = saved.trailVisualsEnabled;
   // Version 0.1 stored a { label, selector } object. Keep existing users' choices valid.

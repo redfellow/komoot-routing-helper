@@ -23,7 +23,7 @@ async function setup(saved, initial = true) {
 				return selector === 'button svg[viewBox="0 0 24 24"] path' ? [path] : [];
 			}, addEventListener(name, fn) { events[name] = fn; } },
 		window: { setInterval(fn) { tick = fn; }, clearInterval() { tick = undefined; }, setTimeout(fn) { save = fn; }, clearTimeout() {} },
-		chrome: { storage: { local: { async get() { return { sidebarOpen: saved }; }, async set(value) { writes.push(value.sidebarOpen); } } } }
+		KrbBrowser: { storage: { local: { async get() { return { sidebarOpen: saved }; }, async set(value) { writes.push(value.sidebarOpen); } } } }
 	});
 	await new Promise(setImmediate);
 	return { tick() { tick?.(); }, save() { return save?.(); }, events, button, writes, setOpen(value) { open = value; }, clicks() { return clicks; } };

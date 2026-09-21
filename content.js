@@ -12,7 +12,7 @@ function installMapBridge() {
   if (document.querySelector("#krb-map-bridge")) return;
   const script = document.createElement("script");
   script.id = "krb-map-bridge";
-  script.src = chrome.runtime.getURL("map-bridge.js");
+  script.src = globalThis.KrbBrowser.runtime.getURL("map-bridge.js");
   script.addEventListener("load", () => refresh(false));
   (document.head || document.documentElement).append(script);
 }
@@ -41,7 +41,7 @@ function setupPanelControls(panel, state = {}) {
 		toggle.disabled = true;
 		try {
 			const options = await contentSettings.getOptions();
-			await chrome.storage.sync.set({ trailVisualsEnabled: options.visualsEnabled === false });
+			await globalThis.KrbBrowser.storage.sync.set({ trailVisualsEnabled: options.visualsEnabled === false });
 			await refresh(false);
 		}
 		catch (error) {
@@ -66,7 +66,7 @@ function setupPanelControls(panel, state = {}) {
 	function savePanelState() {
 		const panelState = { open: panel.open, position };
 		pendingSave = pendingSave.then(function () {
-			return chrome.storage.local.set({ panelState });
+			return globalThis.KrbBrowser.storage.local.set({ panelState });
 		}).catch(function (error) {
 			console.error("Routing Buddy could not save panel state:", error);
 		});
@@ -123,7 +123,7 @@ function setupPanelControls(panel, state = {}) {
 		event.preventDefault();
 		event.stopPropagation();
 		try {
-			const result = await chrome.runtime.sendMessage({ type: "KRB_OPEN_SETTINGS" });
+			const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_OPEN_SETTINGS" });
 			if (!result?.ok) throw new Error(result?.error || "Could not open settings");
 			settings.title = "Open settings";
 		}
@@ -195,7 +195,7 @@ async function rememberHeatmapSport(event) {
     const label = node.textContent?.trim();
     if (HEATMAP_SPORTS.includes(label)) {
       const options = await contentSettings.getOptions();
-      if (options.rememberLayers) await chrome.storage.sync.set({
+      if (options.rememberLayers) await globalThis.KrbBrowser.storage.sync.set({
         trailOptions: { ...options, rememberedLayers: { ...options.rememberedLayers, heatmapSport: label } }
       });
       return;
@@ -213,7 +213,7 @@ async function rememberLayerClick(event) {
   if (!kind || !label || label === "Layers") return;
   const options = await contentSettings.getOptions();
   if (!options.rememberLayers) return;
-  await chrome.storage.sync.set({
+  await globalThis.KrbBrowser.storage.sync.set({
     trailOptions: { ...options, rememberedLayers: { ...options.rememberedLayers, [kind]: label } }
   });
 }
@@ -380,9 +380,10 @@ async function restoreLayers(options) {
   }, 350);
 }
 
-async function refresh(shouldRestore = false) {
-  const [rules, options, colours] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions(), contentSettings.getColours()]);
-  const { panelState } = await chrome.storage.local.get("panelState");
+async function refresh(shouldRestore = false, previewColours) {
+  const [rules, options, savedColours] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions(), contentSettings.getColours()]);
+  const colours = previewColours || savedColours;
+  const { panelState } = await globalThis.KrbBrowser.storage.local.get("panelState");
   createPanel(panelState);
   renderLegend(rules, options.maximumTrailLevel, colours);
 	const panel = document.querySelector("#krb-panel");
@@ -396,7 +397,14 @@ async function refresh(shouldRestore = false) {
   if (shouldRestore) restoreLayers(options);
 }
 
-chrome.storage.onChanged.addListener((changes, area) => {
+globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
+	if (sender.id !== globalThis.KrbBrowser.runtime.id || message?.type !== "KRB_PREVIEW_COLOURS") return;
+	const colours = message.colours;
+	if (!colours || !contentSettings.LEVELS.every((level) => /^#[0-9a-f]{6}$/i.test(colours[level]))) return;
+	return refresh(false, colours);
+});
+
+globalThis.KrbBrowser.storage.onChanged.addListener((changes, area) => {
   if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours || changes.trailVisualsEnabled)) refresh(false);
 });
 

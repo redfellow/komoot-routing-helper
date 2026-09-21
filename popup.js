@@ -2,6 +2,9 @@ const popupSettings = globalThis.KrbSettings;
 
 const rulesElement = document.querySelector("#rules");
 const status = document.querySelector("#status");
+let colourSaveTimer;
+let lastSavedColours;
+let colourWrites = Promise.resolve();
 
 function render(rules, colours) {
   rulesElement.replaceChildren(...popupSettings.LEVELS.map(function (level) {
@@ -20,40 +23,124 @@ function render(rules, colours) {
       <option value="off">Do not highlight</option>`;
     select.value = rules[level];
     select.addEventListener("change", save);
-    const picker = document.createElement("input");
-		picker.type = "color";
+		const picker = document.createElement("button");
+		picker.type = "button";
 		picker.name = level;
 		picker.value = colours[level];
 		picker.className = "rule__colour";
+		picker.style.background = picker.value;
 		picker.setAttribute("aria-label", `${level} highlight colour`);
-		picker.title = `${level} highlight colour`;
-		picker.addEventListener("input", function () {
-			badge.style.background = picker.value;
+		picker.setAttribute("aria-expanded", "false");
+		const editor = document.createElement("div");
+		editor.className = "rule__editor";
+		editor.hidden = true;
+		const sliders = [];
+		const hex = document.createElement("input");
+		hex.type = "text";
+		hex.value = picker.value;
+		hex.maxLength = 7;
+		hex.setAttribute("aria-label", `${level} hex colour`);
+		function update(value) {
+			picker.value = value;
+			picker.style.background = value;
+			badge.style.background = value;
+			hex.value = value;
+			previewColours();
+			window.clearTimeout(colourSaveTimer);
+			colourSaveTimer = window.setTimeout(saveColours, 500);
+		}
+		for (const [index, channel] of ["Red", "Green", "Blue"].entries()) {
+			const label = document.createElement("label");
+			label.textContent = channel;
+			const slider = document.createElement("input");
+			slider.type = "range";
+			slider.min = "0";
+			slider.max = "255";
+			slider.step = "1";
+			slider.value = parseInt(picker.value.slice(1 + index * 2, 3 + index * 2), 16);
+			slider.setAttribute("aria-label", `${level} ${channel.toLowerCase()}`);
+			sliders.push(slider);
+			slider.addEventListener("input", function () {
+				update("#" + sliders.map((input) => Number(input.value).toString(16).padStart(2, "0")).join(""));
+			});
+			slider.addEventListener("change", saveColours);
+			label.append(slider);
+			editor.append(label);
+		}
+		hex.addEventListener("input", function () {
+			if (!/^#[0-9a-f]{6}$/i.test(hex.value)) return;
+			update(hex.value);
+			sliders.forEach(function (slider, index) {
+				slider.value = parseInt(hex.value.slice(1 + index * 2, 3 + index * 2), 16);
+			});
 		});
-		picker.addEventListener("change", saveColours);
-		row.append(badge, select, picker);
+		hex.addEventListener("change", saveColours);
+		const done = document.createElement("button");
+		done.type = "button";
+		done.textContent = "Done";
+		done.addEventListener("click", function () {
+			saveColours();
+			editor.hidden = true;
+			picker.setAttribute("aria-expanded", "false");
+		});
+		picker.addEventListener("click", function () {
+			editor.hidden = !editor.hidden;
+			picker.setAttribute("aria-expanded", String(!editor.hidden));
+		});
+		editor.append(hex, done);
+		row.append(badge, select, picker, editor);
     return row;
   }));
 }
 
+let previewFrame;
+function previewColours() {
+	if (previewFrame) return;
+	previewFrame = window.requestAnimationFrame(async function () {
+		previewFrame = undefined;
+		const colours = Object.fromEntries([...rulesElement.querySelectorAll(".rule__colour")]
+			.map((picker) => [picker.name, picker.value]));
+		try {
+			const [tab] = await globalThis.KrbBrowser.tabs.query({ active: true, currentWindow: true });
+			if (tab?.id) await globalThis.KrbBrowser.tabs.sendMessage(tab.id, { type: "KRB_PREVIEW_COLOURS", colours });
+		}
+		catch (error) {
+			// The popup may also be opened on a page without our content script.
+			console.debug("Routing Buddy colour preview unavailable:", error.message);
+		}
+	});
+}
+
 async function saveColours() {
-	const trailColours = Object.fromEntries([...rulesElement.querySelectorAll('input[type="color"]')]
+	window.clearTimeout(colourSaveTimer);
+	colourSaveTimer = undefined;
+	const trailColours = Object.fromEntries([...rulesElement.querySelectorAll(".rule__colour")]
 		.map((picker) => [picker.name, picker.value]));
-	await chrome.storage.sync.set({ trailColours });
-	status.textContent = "Colours saved — the planner updates automatically.";
+	const snapshot = JSON.stringify(trailColours);
+	if (snapshot === lastSavedColours) return;
+	lastSavedColours = snapshot;
+	colourWrites = colourWrites.then(async function () {
+		await globalThis.KrbBrowser.storage.sync.set({ trailColours });
+		status.textContent = "Colours saved — the planner updates automatically.";
+	}).catch(function (error) {
+		lastSavedColours = undefined;
+		status.textContent = "Could not save colours. Please try again.";
+		console.error("Routing Buddy could not save colours:", error);
+	});
+	await colourWrites;
 }
 
 async function save() {
   const trailRules = Object.fromEntries([...rulesElement.querySelectorAll("select")]
     .map((select) => [select.name, select.value]));
-  await chrome.storage.sync.set({ trailRules });
+  await globalThis.KrbBrowser.storage.sync.set({ trailRules });
   status.textContent = "Saved — the planner updates automatically.";
   window.setTimeout(() => { status.textContent = ""; }, 2200);
 }
 
 async function saveOptions() {
   const existing = await popupSettings.getOptions();
-  await chrome.storage.sync.set({
+  await globalThis.KrbBrowser.storage.sync.set({
     trailOptions: {
       ...existing,
       maximumTrailLevel: document.querySelector("#maximumLevel").value,
@@ -65,7 +152,11 @@ async function saveOptions() {
 }
 
 document.querySelector("#restore").addEventListener("click", async function () {
-  await chrome.storage.sync.set({ trailRules: popupSettings.DEFAULT_RULES, trailColours: popupSettings.HIGHLIGHT_COLOURS, trailOptions: popupSettings.DEFAULT_OPTIONS });
+  window.clearTimeout(colourSaveTimer);
+  colourSaveTimer = undefined;
+  await colourWrites;
+  lastSavedColours = undefined;
+  await globalThis.KrbBrowser.storage.sync.set({ trailRules: popupSettings.DEFAULT_RULES, trailColours: popupSettings.HIGHLIGHT_COLOURS, trailOptions: popupSettings.DEFAULT_OPTIONS });
   render(popupSettings.DEFAULT_RULES, popupSettings.HIGHLIGHT_COLOURS);
   document.querySelector("#maximumLevel").value = popupSettings.DEFAULT_OPTIONS.maximumTrailLevel;
   document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
@@ -80,5 +171,9 @@ async function initialise() {
   document.querySelector("#maximumLevel").addEventListener("change", saveOptions);
   document.querySelector("#rememberLayers").addEventListener("change", saveOptions);
 }
+
+window.addEventListener("pagehide", function () {
+	if (colourSaveTimer !== undefined) saveColours();
+});
 
 initialise();

@@ -137,7 +137,7 @@ test("foreign-origin configuration is ignored", function () {
 
 test("visuals default to enabled and saved disabled preference survives option loading", async function () {
 	let saved = {};
-	const context = { chrome: { storage: { sync: { async get() { return saved; } } } } };
+	const context = { KrbBrowser: { storage: { sync: { async get() { return saved; } } } } };
 	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), context);
 	assert.equal((await context.KrbSettings.getOptions()).visualsEnabled, true);
 	saved = { trailOptions: { visualsEnabled: false, rememberLayers: true } };
@@ -162,7 +162,7 @@ test("custom colours update live strokes and labels while avoid keeps its warnin
 
 test("saved colours merge with defaults and invalid values fall back safely", async function () {
 	let saved = {};
-	const context = { chrome: { storage: { sync: { async get() { return saved; } } } } };
+	const context = { KrbBrowser: { storage: { sync: { async get() { return saved; } } } } };
 	runInNewContext(readFileSync(new URL("../settings.js", import.meta.url), "utf8"), context);
 	assert.deepEqual(copy(await context.KrbSettings.getColours()), copy(context.KrbSettings.HIGHLIGHT_COLOURS));
 	saved = { trailColours: { S0: "#ABCDEF", S1: "red", S2: null } };

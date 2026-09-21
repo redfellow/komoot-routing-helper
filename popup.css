@@ -14,3 +14,8 @@ button { margin-top: 4px; padding: 7px 9px; border: 0; border-radius: 6px; backg
 .avoid-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #7a1016; }
 
 .rule__colour { width: 32px; height: 32px; padding: 2px; border: 1px solid #c9d0cb; border-radius: 6px; background: white; cursor: pointer; }
+
+.rule__editor { grid-column: 1 / -1; padding: 8px; border-radius: 6px; background: #f1f5f2; }
+.rule__editor label { display: grid; grid-template-columns: 45px 1fr; align-items: center; font-size: 12px; }
+.rule__editor input[type="range"] { width: 100%; }
+.rule__editor input[type="text"] { width: 90px; margin-right: 12px; padding: 5px; }

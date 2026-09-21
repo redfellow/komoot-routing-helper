@@ -24,7 +24,7 @@
 			const sidebar = readSidebar();
 			if (!sidebar) return;
 			try {
-				await chrome.storage.local.set({ sidebarOpen: sidebar.open });
+				await globalThis.KrbBrowser.storage.local.set({ sidebarOpen: sidebar.open });
 			}
 			catch (error) {
 				console.error("Routing Buddy could not save sidebar state:", error);
@@ -43,7 +43,7 @@
 
 	async function restore() {
 		try {
-			const saved = await chrome.storage.local.get("sidebarOpen");
+			const saved = await globalThis.KrbBrowser.storage.local.get("sidebarOpen");
 			let attempts = 0;
 			let clicked = false;
 			const timer = window.setInterval(function () {

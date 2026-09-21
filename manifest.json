@@ -26,6 +26,7 @@
 				"https://www.komoot.com/plan/*"
 			],
 			"js": [
+				"browser-api.js",
 				"settings.js",
 				"sidebar.js",
 				"content.js"
@@ -47,7 +48,7 @@
 		}
 	],
 	"background": {
-		"service_worker": "background.js"
+		"service_worker": "background-worker.js"
 	},
 	"icons": {
 		"16": "icon-rounded.png",
