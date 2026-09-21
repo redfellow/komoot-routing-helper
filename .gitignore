@@ -3,3 +3,6 @@
 .vscode/
 
 /TODO.md
+/node_modules/
+/dist/
+/artifacts/
