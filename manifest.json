@@ -20,7 +20,10 @@
 				"https://www.komoot.com/tour/*/zoom",
 				"https://www.komoot.com/tour/*/zoom?*",
 				"https://www.komoot.com/tour/*/edit",
-				"https://www.komoot.com/tour/*/edit?*"
+				"https://www.komoot.com/tour/*/edit?*",
+				"https://www.komoot.com/plan",
+				"https://www.komoot.com/plan?*",
+				"https://www.komoot.com/plan/*"
 			],
 			"js": [
 				"settings.js",

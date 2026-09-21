@@ -1,5 +1,5 @@
 (function () {
-	if (!/^\/tour\/[^/]+\/(zoom|edit)$/.test(location.pathname)) return;
+	if (!/^\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/.*)?)$/.test(location.pathname)) return;
 	const arrows = {
 		"M15.615 18.885L8.745 12l6.87-6.885L13.5 3l-9 9 9 9 2.115-2.115z": true,
 		"M5.385 5.115L12.255 12l-6.87 6.885L7.5 21l9-9-9-9-2.115 2.115z": false

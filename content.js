@@ -1,5 +1,5 @@
 (() => {
-	if (!/^\/tour\/[^/]+\/(zoom|edit)$/.test(location.pathname)) return;
+	if (!/^\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/.*)?)$/.test(location.pathname)) return;
 const contentSettings = globalThis.KrbSettings;
 
 const AVOID_COLOUR = "#7a1016";
