@@ -18,7 +18,16 @@ function installMapBridge() {
 }
 
 function sendMapConfig(rules, options, colours) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+  window.postMessage({ 
+    type: "KRB_MAP_CONFIG", 
+    config: { 
+      rules, 
+      colours, 
+      visualsEnabled: options.visualsEnabled !== false, 
+      maximumTrailLevel: options.maximumTrailLevel,
+      trailWidth: options.trailWidth || 2 //place holder for UI trail line width, defaults 2
+    } 
+  }, location.origin);
 }
 
 function createPanel(state) {
