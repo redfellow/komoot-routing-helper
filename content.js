@@ -26,9 +26,65 @@ function createPanel(state) {
   const panel = document.createElement("details");
   panel.id = "krb-panel";
   panel.open = state?.open !== false;
-  panel.innerHTML = `<summary><span class="krb-title"></span><button type="button" class="krb-panel__toggle" role="switch" aria-checked="true" aria-label="Trail visual changes" title="Toggle trail visual changes">On</button><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
+  panel.innerHTML = `<summary><span class="krb-panel__drag" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="krb-title"></span><button type="button" class="krb-panel__toggle" role="switch" aria-checked="true" aria-label="Trail visual changes" title="Toggle trail visual changes">On</button><button type="button" class="krb-panel__settings" aria-label="Open Routing Buddy settings" title="Open settings">⚙</button><span class="krb-caret">⌃</span></summary><div class="krb-legend"></div>`;
   document.documentElement.append(panel);
 	setupPanelControls(panel, state || {});
+}
+
+function toggleSettingsDialog(panel, settings) {
+	let dialog = document.querySelector("#krb-settings-dialog");
+	if (dialog) {
+		dialog.hidden = !dialog.hidden;
+		settings.setAttribute("aria-expanded", String(!dialog.hidden));
+		if (!dialog.hidden) dialog.querySelector("button").focus();
+		return;
+	}
+	dialog = document.createElement("section");
+	dialog.id = "krb-settings-dialog";
+	dialog.setAttribute("role", "dialog");
+	dialog.setAttribute("aria-label", "Routing Buddy settings");
+	const close = document.createElement("button");
+	close.className = "krb-settings__close";
+	close.type = "button";
+	close.textContent = "×";
+	close.setAttribute("aria-label", "Close settings");
+	const frame = document.createElement("iframe");
+	frame.className = "krb-settings__frame";
+	frame.title = "Routing Buddy settings";
+	frame.src = globalThis.KrbBrowser.runtime.getURL("popup.html");
+	dialog.append(close, frame);
+	document.documentElement.append(dialog);
+	settings.setAttribute("aria-expanded", "true");
+	function dismiss() {
+		// Keep the settings document alive so pending saves finish after closing.
+		dialog.hidden = true;
+		settings.setAttribute("aria-expanded", "false");
+		settings.focus();
+	}
+	close.addEventListener("click", dismiss);
+	dialog.addEventListener("keydown", function (event) {
+		if (event.key === "Escape") { event.stopPropagation(); dismiss(); }
+	});
+	window.addEventListener("message", function (event) {
+		if (event.source !== frame.contentWindow || event.data?.type !== "KRB_CLOSE_SETTINGS") return;
+		if (event.origin !== new URL(frame.src).origin) return;
+		dismiss();
+	});
+	function positionDialog() {
+		const rect = panel.getBoundingClientRect();
+		const width = Math.min(360, window.innerWidth - 16);
+		const height = Math.min(510, window.innerHeight - 16);
+		dialog.style.width = `${width}px`;
+		dialog.style.height = `${height}px`;
+		dialog.style.left = `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`;
+		const top = rect.bottom + 6 + height <= window.innerHeight - 8 ? rect.bottom + 6 : rect.top - height - 6;
+		dialog.style.top = `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`;
+	}
+	positionDialog();
+	// Follow dragging, expanding/collapsing, and viewport changes.
+	new MutationObserver(positionDialog).observe(panel, { attributes: true, attributeFilter: ["style", "open"] });
+	window.addEventListener("resize", positionDialog);
+	close.focus();
 }
 
 function setupPanelControls(panel, state = {}) {
@@ -119,18 +175,10 @@ function setupPanelControls(panel, state = {}) {
 		const rect = panel.getBoundingClientRect();
 		movePanel(rect.left, rect.top);
 	});
-	settings.addEventListener("click", async function (event) {
+	settings.addEventListener("click", function (event) {
 		event.preventDefault();
 		event.stopPropagation();
-		try {
-			const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_OPEN_SETTINGS" });
-			if (!result?.ok) throw new Error(result?.error || "Could not open settings");
-			settings.title = "Open settings";
-		}
-		catch (error) {
-			console.error("Routing Buddy settings:", error);
-			settings.title = "Could not open settings. Try the extension toolbar icon.";
-		}
+		toggleSettingsDialog(panel, settings);
 	});
 }
 

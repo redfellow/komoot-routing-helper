@@ -213,4 +213,10 @@ window.addEventListener("pagehide", function () {
 	if (squadratsSaveTimer !== undefined) saveSquadrats();
 });
 
+window.addEventListener("keydown", function (event) {
+	if (event.key === "Escape" && window.parent !== window) {
+		window.parent.postMessage({ type: "KRB_CLOSE_SETTINGS" }, "https://www.komoot.com");
+	}
+});
+
 initialise();

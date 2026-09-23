@@ -40,7 +40,8 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
-				"map-bridge.js"
+				"map-bridge.js",
+				"popup.html"
 			],
 			"matches": [
 				"https://www.komoot.com/*"
