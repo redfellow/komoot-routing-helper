@@ -205,3 +205,41 @@ test("labels contrast with their halo while line colours remain unchanged; Off r
 	f.configure({ visualsEnabled: false });
 	assert.deepEqual(f.layers[2].paint, originalPaint);
 });
+
+test("Squadrats opacity scales fills and lines, preserves zoom stops and restores defaults", function () {
+	const f = fixture();
+	const fill = { id: "squadrats-squadrats", source: "squadrats-source", type: "fill", paint: { "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.8, 14, 0.1] } };
+	const line = { id: "squadrats-outline-squadrats", source: "squadrats-source", type: "line", paint: {} };
+	const unrelated = { id: "squadrats-unrelated", source: "komoot", type: "fill", paint: { "fill-opacity": 0.7 } };
+	f.layers.push(fill, line, unrelated);
+	const original = copy(fill.paint);
+	f.configure({ squadratsOpacity: 25, visualsEnabled: false });
+	assert.deepEqual(fill.paint["fill-opacity"], ["interpolate", ["linear"], ["zoom"], 3, ["*", 0.8, 0.25], 14, ["*", 0.1, 0.25]]);
+	assert.deepEqual(line.paint["line-opacity"], ["*", 1, 0.25]);
+	assert.equal(unrelated.paint["fill-opacity"], 0.7);
+	const writes = f.writes();
+	f.restyle();
+	assert.equal(f.writes(), writes);
+	f.configure({ squadratsOpacity: 0 });
+	assert.deepEqual(line.paint["line-opacity"], ["*", 1, 0]);
+	f.configure({ squadratsOpacity: 100 });
+	assert.deepEqual(fill.paint, original);
+	assert.deepEqual(line.paint, {});
+});
+
+test("Squadrats layers arriving late, replaced or externally restyled get fresh baselines", function () {
+	const f = fixture();
+	f.configure({ squadratsOpacity: 50 });
+	const layer = { id: "squadrats-grid", source: "squadrats-grid", type: "line", paint: { "line-opacity": 0.2 } };
+	f.layers.push(layer); f.restyle();
+	assert.deepEqual(layer.paint["line-opacity"], ["*", 0.2, 0.5]);
+	layer.paint["line-opacity"] = 0.8;
+	f.restyle();
+	assert.deepEqual(layer.paint["line-opacity"], ["*", 0.8, 0.5]);
+	f.layers.pop(); f.restyle();
+	const replacement = { ...layer, paint: { "line-opacity": 0.4 } };
+	f.layers.push(replacement); f.restyle();
+	assert.deepEqual(replacement.paint["line-opacity"], ["*", 0.4, 0.5]);
+	f.configure({ squadratsOpacity: 100 });
+	assert.equal(replacement.paint["line-opacity"], 0.4);
+});
