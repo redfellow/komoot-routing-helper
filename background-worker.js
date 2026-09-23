@@ -1,2 +1,1 @@
-// Chrome service-worker entry; Firefox loads these same scripts in manifest order.
-importScripts("browser-api.js", "background.js");
+importScripts("browser-api.js", "hazards.js", "background.js");

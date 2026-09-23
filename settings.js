@@ -12,9 +12,10 @@ const DEFAULT_RULES = {
 
 const DEFAULT_OPTIONS = {
 	visualsEnabled: true,
+	showHazards: true,
 	squadratsOpacity: 100,
   maximumTrailLevel: "S5",
-  rememberLayers: false,
+  rememberLayers: true,
   rememberedLayers: {}
 };
 

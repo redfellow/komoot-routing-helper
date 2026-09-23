@@ -5,7 +5,7 @@ import { resolve, join } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 export const runtimeFiles = [
-	"browser-api.js", "background.js", "settings.js", "sidebar.js", "content.js",
+	"browser-api.js", "hazards.js", "background.js", "settings.js", "sidebar.js", "content.js",
 	"map-bridge.js", "planner.css", "popup.html", "popup.css", "popup.js"
 ];
 
@@ -18,12 +18,12 @@ export async function build(output = join(root, "dist")) {
 		manifest.icons = Object.fromEntries([16, 32, 48, 128].map((size) => [String(size), `icons/icon-${size}.png`]));
 		manifest.action.default_icon = { "16": manifest.icons["16"], "32": manifest.icons["32"] };
 		if (browser === "firefox") {
-			manifest.background = { scripts: ["browser-api.js", "background.js"] };
+			manifest.background = { scripts: ["browser-api.js", "hazards.js", "background.js"] };
 			manifest.browser_specific_settings = {
 				gecko: {
 					id: "komoot-routing-buddy@redfellow",
 					strict_min_version: "142.0",
-					data_collection_permissions: { required: ["none"] }
+					data_collection_permissions: { required: ["locationInfo"] }
 				}
 			};
 		}

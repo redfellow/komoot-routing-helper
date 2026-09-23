@@ -161,18 +161,99 @@
 			canSeparateStrokes(map.getPaintProperty(id, property)));
 	}
 
+	let hazardTimer;
+	let hazardRetries = 0;
+	let hazardRequest = 0;
+	let hazardKey;
+	let hazardData;
+	let hazardEnabled = false;
+	const hazardIds = ["krb-conditions-line", "krb-conditions-point", "krb-conditions-label"];
+	function hazardStatus(text) {
+		window.postMessage({ type: "KRB_HAZARD_STATUS", text }, location.origin);
+	}
+	function removeHazards() {
+		for (const id of [...hazardIds].reverse()) if (map.getLayer(id)) map.removeLayer(id);
+		if (map.getSource?.("krb-conditions")) map.removeSource("krb-conditions");
+	}
+	function drawHazards() {
+		if (!hazardEnabled || !hazardData || !map.addSource) return;
+		if (!map.getSource("krb-conditions")) map.addSource("krb-conditions", { type: "geojson", data: hazardData, attribution: "© OpenStreetMap contributors" });
+		const layers = [
+			{ id: hazardIds[0], type: "line", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#e89416", "line-width": 2, "line-dasharray": [1, 3] } },
+			{ id: hazardIds[1], type: "circle", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-color": "#e89416", "circle-radius": 5, "circle-stroke-width": 1, "circle-stroke-color": "#222222" } },
+			{ id: hazardIds[2], type: "symbol", filter: ["==", ["geometry-type"], "LineString"], layout: { "symbol-placement": "line", "text-field": ["get", "label"], "text-size": 11, "text-offset": [0, 1.5] }, paint: { "text-color": "#fff1cf", "text-halo-color": "#222222", "text-halo-width": 1 } }
+		];
+		for (const layer of layers) if (!map.getLayer(layer.id)) map.addLayer({ ...layer, source: "krb-conditions", minzoom: 14 });
+	}
+	function scheduleHazards() {
+		if (!map?.getBounds) return;
+		clearTimeout(hazardTimer);
+		hazardRetries = 0;
+		// Invalidate in-flight responses immediately, before the pan debounce.
+		hazardRequest++;
+		if (!hazardData) hazardKey = undefined;
+		hazardTimer = setTimeout(updateHazards, 750);
+	}
+	function updateHazards() {
+		if (!map || !hazardEnabled) return;
+		if (map.getZoom() < 14) {
+			hazardKey = undefined; hazardData = undefined; removeHazards();
+			hazardStatus("Hazards: zoom in to load"); return;
+		}
+		const b = map.getBounds();
+		const bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
+		const key = bounds.map((value) => value.toFixed(4)).join(",");
+		if (key === hazardKey) { drawHazards(); return; }
+		hazardKey = key;
+		hazardData = undefined;
+		removeHazards();
+		hazardStatus("Loading OSM hazards…");
+		window.postMessage({ type: "KRB_HAZARD_VIEW", bounds, requestId: hazardRequest }, location.origin);
+	}
+	window.addEventListener("message", function (event) {
+		if (event.source !== window || event.origin !== location.origin || event.data?.type !== "KRB_HAZARD_DATA") return;
+		if (!map || !hazardEnabled || event.data.requestId !== hazardRequest) return;
+		if (event.data.error) {
+			hazardKey = undefined;
+			const retryMs = event.data.retryMs;
+			if (Number.isFinite(retryMs) && retryMs > 0 && hazardRetries < 3) {
+				hazardRetries++;
+				const delay = Math.max(30000, Math.min(300000, retryMs));
+				hazardStatus(`Hazards: ${event.data.error}. Retrying in ${Math.ceil(delay / 1000)}s (${hazardRetries}/3)`);
+				clearTimeout(hazardTimer);
+				hazardTimer = setTimeout(updateHazards, delay);
+			}
+			else hazardStatus(`Hazards: ${event.data.error}. Move the map or toggle hazards to retry.`);
+			return;
+		}
+		const data = event.data.data;
+		if (data?.type !== "FeatureCollection" || !Array.isArray(data.features)) return;
+		hazardRetries = 0;
+		hazardData = data;
+		drawHazards();
+		hazardStatus(data.features.length ? `OSM hazards / width: ${data.features.length} mapped features` : "No mapped hazards / width here; conditions unknown");
+	});
+
 	function apply() {
 		if (!map || !config || applying) return;
 		applying = true;
 		try {
 			applySquadrats();
+			if (hazardEnabled !== (config.showHazards === true)) {
+				hazardEnabled = config.showHazards === true;
+				hazardKey = undefined;
+				hazardRequest++;
+				if (hazardEnabled) scheduleHazards();
+				else { hazardData = undefined; removeHazards(); hazardStatus(""); }
+			}
+			drawHazards();
 			if (config.visualsEnabled === false) {
 				restore();
 				postStatus({ ready: true, enabled: false });
 				return;
 			}
 
-			const styleLayers = map.getStyle()?.layers || [];
+			const styleLayers = (map.getStyle()?.layers || []).filter((layer) => !layer.id.startsWith("krb-conditions"));
 			// Ignore zoom limits: a selected MTB overlay should retain its native
 			// zoom behaviour rather than falling back to wider paths when zoomed out.
 			const nativeLayers = styleLayers.filter((layer) =>
@@ -301,6 +382,11 @@
 		if (map && !document.contains(map.getCanvas())) {
 			map.off("styledata", scheduleApply);
 			map.off("idle", scheduleApply);
+			map.off("moveend", scheduleHazards);
+			hazardEnabled = false;
+			hazardRequest++;
+			hazardData = undefined;
+			hazardKey = undefined;
 			map = undefined;
 			originals.clear();
 			squadratsOriginals.clear();
@@ -323,6 +409,12 @@
 		*/
 		map.on("styledata", scheduleApply);
 		map.on("idle", scheduleApply);
+		map.on("moveend", scheduleHazards);
+		map.on("click", function (event) {
+			if (!hazardEnabled || !map.getLayer(hazardIds[0])) return;
+			const feature = map.queryRenderedFeatures(event.point, { layers: hazardIds })[0];
+			if (feature) hazardStatus(`${feature.properties.label} (OSM ${feature.properties.osmId})`);
+		});
 		postStatus({ ready: true });
 		scheduleApply();
 	}, 1000);

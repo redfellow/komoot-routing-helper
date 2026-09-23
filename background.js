@@ -13,3 +13,13 @@ async function openSettings(windowId, sendResponse) {
 		sendResponse({ ok: false, error: error.message });
 	}
 }
+
+globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+	if (message?.type !== "KRB_LOAD_HAZARDS" || sender.id !== globalThis.KrbBrowser.runtime.id || !sender.tab) return;
+	if (!/^https:\/\/www\.komoot\.com\/(?:tour\/[^/]+\/(?:zoom|edit)|plan(?:\/[^?]*)?)(?:\?.*)?$/.test(sender.url || "")) return;
+	globalThis.KrbBrowser.storage.sync.get("trailOptions").then(function (saved) {
+		if (saved.trailOptions?.showHazards === false) throw new Error("Hazards disabled");
+		return globalThis.KrbHazards.load(message.bounds);
+	}).then((data) => sendResponse({ data })).catch((error) => sendResponse({ error: error.message, retryMs: error.retryMs }));
+	return true;
+});

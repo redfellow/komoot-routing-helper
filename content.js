@@ -18,8 +18,41 @@ function installMapBridge() {
 }
 
 function sendMapConfig(rules, options, colours) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, squadratsOpacity: options.squadratsOpacity, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, showHazards: options.showHazards, squadratsOpacity: options.squadratsOpacity, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
+
+window.addEventListener("message", async function (event) {
+	if (event.source !== window || event.origin !== location.origin) return;
+	if (event.data?.type === "KRB_HAZARD_VIEW") {
+		const { bounds, requestId } = event.data;
+		if (!(await contentSettings.getOptions()).showHazards) return;
+		try {
+			const result = await globalThis.KrbBrowser.runtime.sendMessage({ type: "KRB_LOAD_HAZARDS", bounds });
+			window.postMessage({ type: "KRB_HAZARD_DATA", requestId, ...result }, location.origin);
+		}
+		catch (error) { window.postMessage({ type: "KRB_HAZARD_DATA", requestId, error: error.message }, location.origin); }
+	}
+	if (event.data?.type === "KRB_HAZARD_STATUS") {
+		const panel = document.querySelector("#krb-panel");
+		if (!panel) return;
+		let status = panel.querySelector(".krb-panel__hazards");
+		if (!status) {
+			status = document.createElement("div");
+			status.className = "krb-panel__hazards";
+			panel.append(status);
+		}
+		status.hidden = event.data.text === "";
+		status.textContent = String(event.data.text || "").slice(0, 500);
+		if (!status.hidden) {
+			const credit = document.createElement("a");
+			credit.href = "https://www.openstreetmap.org/copyright";
+			credit.target = "_blank";
+			credit.rel = "noopener noreferrer";
+			credit.textContent = " © OpenStreetMap";
+			status.append(credit);
+		}
+	}
+});
 
 function createPanel(state) {
   if (document.querySelector("#krb-panel")) return;

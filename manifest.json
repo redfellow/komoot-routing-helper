@@ -56,5 +56,8 @@
 		"32": "icon-rounded.png",
 		"48": "icon-rounded.png",
 		"128": "icon-rounded.png"
-	}
+	},
+	"host_permissions": [
+		"https://overpass-api.de/*"
+	]
 }

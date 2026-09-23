@@ -144,6 +144,7 @@ async function saveOptions() {
     trailOptions: {
       ...existing,
       maximumTrailLevel: document.querySelector("#maximumLevel").value,
+      showHazards: document.querySelector("#showHazards").checked,
       rememberLayers: document.querySelector("#rememberLayers").checked
     }
   });
@@ -159,6 +160,7 @@ document.querySelector("#restore").addEventListener("click", async function () {
   await globalThis.KrbBrowser.storage.sync.set({ trailRules: popupSettings.DEFAULT_RULES, trailColours: popupSettings.HIGHLIGHT_COLOURS, trailOptions: popupSettings.DEFAULT_OPTIONS });
   render(popupSettings.DEFAULT_RULES, popupSettings.HIGHLIGHT_COLOURS);
   document.querySelector("#maximumLevel").value = popupSettings.DEFAULT_OPTIONS.maximumTrailLevel;
+  document.querySelector("#showHazards").checked = popupSettings.DEFAULT_OPTIONS.showHazards;
   document.querySelector("#rememberLayers").checked = popupSettings.DEFAULT_OPTIONS.rememberLayers;
   status.textContent = "Suggested rules restored.";
 });
@@ -212,6 +214,8 @@ async function initialise() {
 	slider.addEventListener("input", previewSquadrats);
 	slider.addEventListener("change", saveSquadrats);
   document.querySelector("#maximumLevel").value = options.maximumTrailLevel;
+  document.querySelector("#showHazards").checked = options.showHazards;
+  document.querySelector("#showHazards").addEventListener("change", saveOptions);
   document.querySelector("#rememberLayers").checked = options.rememberLayers;
   document.querySelector("#maximumLevel").addEventListener("change", saveOptions);
   document.querySelector("#rememberLayers").addEventListener("change", saveOptions);
