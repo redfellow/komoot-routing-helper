@@ -6,7 +6,7 @@ This document is intentionally kept general for public repositories. It covers t
 
 1. Use a supported Node.js version and run `npm ci` from the repository root.
 2. Update the extension version in the root `manifest.json` before preparing the release build.
-3. Run the release packaging command to generate the build artifacts and run the regression checks.
+3. Run `npm run package` to run the regression checks and generate both ZIPs directly in `artifacts/`. Names use `chrome--` and `firefox--` prefixes so both can be attached to the same GitHub release.
 4. Test the generated extension builds in a browser before publishing or sharing them.
 5. Record the release version, tested browser versions, and any notable validation results in your release notes.
 

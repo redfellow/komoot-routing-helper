@@ -1,6 +1,10 @@
 # Trail conditions overlay investigation
 
-Investigated 2026-09-23. Proposal only: no runtime code or permissions changed.
+Investigated 2026-09-23. Initial prototype now implemented. Show hazards defaults
+to enabled per the requested behaviour; saved opt-outs remain respected.
+The prototype uses a bounded in-memory cache (not persistent cell caching),
+labels and click/tap details in the floater. Local coverage and browser visuals
+still require live verification. The sections below record the original proposal.
 
 ## Feasibility and scope
 

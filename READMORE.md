@@ -27,7 +27,7 @@ npm run package
 - `npm test` runs the regression suite.
 - `npm run build` builds the extension files into the `dist/` directory.
 - `npm run lint:firefox` builds the project and lints the Firefox build with warnings treated as errors.
-- `npm run package` runs the tests, lints Firefox, and creates ZIP artifacts under `artifacts/chrome/` and `artifacts/firefox/`.
+- `npm run package` runs the tests, lints Firefox, and creates ZIP artifacts directly under `artifacts/`, named `chrome--komoot_routing_buddy-<version>.zip` and `firefox--komoot_routing_buddy-<version>.zip`.
 - `npm run dev:firefox` builds the Firefox extension and launches a Firefox testing session.
 
 ## Build notes
