@@ -62,6 +62,8 @@ function evaluate(expression, properties) {
 	const [operator, ...args] = expression;
 	const ev = (value) => evaluate(value, properties);
 	switch (operator) {
+		case "coalesce": return args.map(ev).find((value) => value !== undefined && value !== null);
+		case "max": return Math.max(...args.map(ev));
 		case "get": return properties[args[0]];
 		case "has": return args[0] in properties;
 		case "to-string": return String(ev(args[0]));
@@ -242,4 +244,125 @@ test("Squadrats layers arriving late, replaced or externally restyled get fresh 
 	assert.deepEqual(replacement.paint["line-opacity"], ["*", 0.4, 0.5]);
 	f.configure({ squadratsOpacity: 100 });
 	assert.equal(replacement.paint["line-opacity"], 0.4);
+});
+
+
+test("MTB visibility switches renderers and restores base path widths without accumulating changes", function () {
+	const f = fixture();
+	const path = { id: "path", type: "line", filter: null, paint: { "line-color": "#777777", "line-width": 1 } };
+	const baseline = copy(path);
+	f.layers.push(path);
+	f.configure();
+	assert.deepEqual(path, baseline);
+	assert.equal(f.layers[0].paint["line-width"], undefined);
+	for (let cycle = 0; cycle < 3; cycle++) {
+		for (const layer of f.layers.slice(0, 3)) layer.layout = { visibility: "none" };
+		f.restyle();
+		assert.equal(evaluate(path.paint["line-color"], { mtb_scale: "0" }), "#26a269");
+		assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 4);
+		assert.equal(evaluate(path.paint["line-width"], {}), 1);
+		assert.deepEqual(f.layers[0].paint, f.original.paint);
+		for (const layer of f.layers.slice(0, 3)) layer.layout.visibility = "visible";
+		f.restyle();
+		assert.deepEqual(path, baseline);
+		assert.equal(f.layers[0].paint["line-width"], undefined);
+		assert.equal(evaluate(f.layers[0].paint["line-color"], { mtb_scale: "0" }), "#26a269");
+	}
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(path, baseline);
+	assert.deepEqual(f.layers[0].paint, f.original.paint);
+});
+
+test("base paths work without MTB layers and switch when the overlay is added or removed", function () {
+	const f = fixture();
+	const native = f.layers.splice(0);
+	const path = { id: "track", type: "line", filter: null, paint: { "line-color": "#777777", "line-width": 2 } };
+	const baseline = copy(path);
+	f.layers.push(path);
+	f.configure();
+	assert.equal(evaluate(path.paint["line-color"], { mtb_scale: "1" }), "#7a1016");
+	f.layers.push(...native); f.restyle();
+	assert.deepEqual(path, baseline);
+	f.layers.splice(1); f.restyle();
+	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 4);
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(path, baseline);
+});
+
+
+test("fallback preserves double-line widths while widening ordinary trails", function () {
+	const f = fixture();
+	f.layers.splice(0);
+	const paints = [
+		{ "line-gap-width": 3 },
+		{ "line-offset": -2 },
+		{ "line-gap-width": { stops: [[12, 0], [16, 4]] } },
+		{ "line-gap-width": ["interpolate", ["linear"], ["zoom"], 12, 0, 16, 4] },
+		{ "line-offset": ["case", ["has", "parallel"], 2, 0] }
+	];
+	for (const [index, paint] of paints.entries()) {
+		f.layers.push({ id: `track-${index}`, type: "line", filter: null,
+			paint: { "line-color": "#777777", "line-width": 1, ...paint } });
+	}
+	const baseline = copy(f.layers);
+	const ordinary = { id: "path", type: "line", filter: null,
+		paint: { "line-width": 1, "line-gap-width": 0, "line-offset": 0 } };
+	f.layers.push(ordinary);
+	f.configure();
+	for (const [index, original] of baseline.entries()) {
+		const layer = f.layers[index];
+		assert.equal(layer.paint["line-width"], 1);
+		assert.equal(evaluate(layer.paint["line-color"], { mtb_scale: "0" }), "#26a269");
+		for (const key of ["line-gap-width", "line-offset"]) assert.deepEqual(layer.paint[key], original.paint[key]);
+	}
+	assert.equal(evaluate(ordinary.paint["line-width"], { mtb_scale: "0" }), 4);
+	// A style update introducing a gap must also undo a previous width increase.
+	ordinary.paint["line-gap-width"] = 2;
+	f.restyle();
+	assert.equal(ordinary.paint["line-width"], 1);
+	const writes = f.writes();
+	f.restyle();
+	assert.equal(f.writes(), writes);
+	f.configure({ visualsEnabled: false });
+	assert.deepEqual(f.layers.slice(0, baseline.length), baseline);
+});
+
+
+test("ordinary trails widen when gap and offset expressions have only zero outputs", function () {
+	const f = fixture();
+	f.layers.splice(0);
+	const zeroStyles = [
+		0, { stops: [[12, 0], [18, 0]] },
+		["interpolate", ["linear"], ["zoom"], 12, 0, 18, 0],
+		["step", ["zoom"], 0, 12, 0, 18, 0],
+		["case", ["has", "track"], 0, 0],
+		["match", ["get", "class"], [1, 2], 0, 0], ["literal", 0]
+	];
+	for (const [index, value] of zeroStyles.entries()) {
+		f.layers.push({ id: `path-${index}`, type: "line", paint: {
+			"line-width": 1, "line-gap-width": value, "line-offset": value
+		} });
+	}
+	f.configure();
+	for (const layer of f.layers) {
+		assert.equal(evaluate(layer.paint["line-width"], { mtb_scale: "0" }), 4, layer.id);
+		assert.equal(evaluate(layer.paint["line-width"], {}), 1);
+	}
+});
+
+
+test("visible MTB labels do not suppress base trail colouring when MTB lines are hidden", function () {
+	const f = fixture();
+	f.layers[0].layout = { visibility: "none" };
+	f.layers[1].layout = { visibility: "none" };
+	const path = { id: "path", type: "line", filter: null, paint: { "line-width": 1, "line-color": "#777777" } };
+	const baseline = copy(path);
+	f.layers.push(path);
+	f.configure();
+	assert.equal(evaluate(path.paint["line-color"], { mtb_scale: "0" }), "#26a269");
+	assert.equal(evaluate(path.paint["line-width"], { mtb_scale: "0" }), 4);
+	assert.match(evaluate(f.layers[2].paint["text-color"], { mtb_scale: "0" }), /^#[0-9a-f]{6}$/);
+	f.layers[0].layout.visibility = "visible";
+	f.restyle();
+	assert.deepEqual(path, baseline);
 });

@@ -53,7 +53,7 @@
 	}
 
 	//check map properties dynamically mmkay.
-	function levelExpression() {
+	function levelExpression(nativeMtb = false) {
 		const value = [
 			"to-string",
 			["coalesce", 
@@ -63,7 +63,7 @@
 				"none"
 			]
 		];
-		const expression = ["match", value];
+		const expression = ["match", nativeMtb ? ["to-string", ["get", "mtb_scale"]] : value];
 		//store the values 
 		for (let level = 0; level <= 5; level++) {
 			expression.push([String(level), `${level}+`, `${level}-`, `S${level}`, `s${level}`, `T${level}`, `t${level}`], level);
@@ -100,13 +100,14 @@
 		if (!same(map.getPaintProperty(id, property), value)) map.setPaintProperty(id, property, value ?? null);
 	}
 
-	function restore() {
+	function restore(keep = new Set()) {
 		for (const [id, original] of originals) {
+			if (keep.has(id)) continue;
+			originals.delete(id);
 			if (map.getLayer(id) !== original.layer) continue;
 			setFilter(id, original.filter);
 			for (const [property, value] of Object.entries(original.paint)) setPaint(id, property, value);
 		}
-		originals.clear();
 	}
 
 	function applySquadrats() {
@@ -131,6 +132,35 @@
 		}
 	}
 
+	function canSeparateStrokes(value) {
+		if (typeof value === "number") return value !== 0;
+		if (value == null) return false;
+		if (Array.isArray(value.stops)) {
+			return value.stops.some((stop) => canSeparateStrokes(stop[1]));
+		}
+		if (!Array.isArray(value)) return false;
+		const [operator] = value;
+		// Inspect outputs only; zoom stops and match labels are not widths.
+		if (operator === "literal") return canSeparateStrokes(value[1]);
+		if (operator === "interpolate") {
+			return value.some((entry, index) => index >= 4 && index % 2 === 0 && canSeparateStrokes(entry));
+		}
+		if (operator === "step" || operator === "case" || operator === "match") {
+			const start = operator === "match" ? 3 : 2;
+			for (let index = start; index < value.length; index += 2) {
+				if (canSeparateStrokes(value[index])) return true;
+			}
+			return operator !== "step" && canSeparateStrokes(value.at(-1));
+		}
+		// Unknown expressions alone are not evidence of a double-line marking.
+		return false;
+	}
+
+	function hasSeparatedStrokes(id) {
+		return ["line-gap-width", "line-offset"].some((property) =>
+			canSeparateStrokes(map.getPaintProperty(id, property)));
+	}
+
 	function apply() {
 		if (!map || !config || applying) return;
 		applying = true;
@@ -141,18 +171,23 @@
 				postStatus({ ready: true, enabled: false });
 				return;
 			}
-			
-			
-			const layers = (map.getStyle()?.layers || []).filter((layer) =>
-				//look for the drawn lines based on different paths/tracks etc. 
-				["line", "symbol"].includes(layer.type) &&
-				(
-					/(mtb_scale|sac_scale|trail_difficulty)/.test(JSON.stringify([layer.filter, layer.layout])) ||
-					/(path|track|footway|cycleway|trail|steps)/i.test(layer.id)
-				)
-			);
 
-			const level = levelExpression();
+			const styleLayers = map.getStyle()?.layers || [];
+			// Ignore zoom limits: a selected MTB overlay should retain its native
+			// zoom behaviour rather than falling back to wider paths when zoomed out.
+			const nativeLayers = styleLayers.filter((layer) =>
+				/mtb/i.test(layer.id) && ["line", "symbol"].includes(layer.type) &&
+				JSON.stringify([layer.filter, layer.layout]).includes('"mtb_scale"'));
+			// Difficulty labels remain visible even with the sport overlay off.
+			const nativeMtb = nativeLayers.some((layer) => layer.type === "line" && layer.layout?.visibility !== "none");
+			const layers = nativeMtb ? nativeLayers : styleLayers.filter((layer) =>
+				(!nativeLayers.includes(layer) || layer.type === "symbol") && ["line", "symbol"].includes(layer.type) &&
+				(/"(mtb_scale|sac_scale|trail_difficulty)"/.test(JSON.stringify([layer.filter, layer.layout])) ||
+					/(path|track|footway|cycleway|trail|steps)/i.test(layer.id)));
+			// Undo the previous renderer before applying the newly selected one.
+			// This also drops backups for removed/replaced style layers.
+			restore(new Set(layers.map((layer) => layer.id)));
+			const level = levelExpression(nativeMtb);
 			const max = Number(config.maximumTrailLevel.slice(1));
 			const applied = [];
 
@@ -218,8 +253,9 @@
 						}, fallback));
 					}
 				}
-				//adding line width to the paths/trails
-				if (layer.type === "line") {
+				// Widen simple trails without distorting casings or parallel strokes.
+				if (layer.type === "line" && !nativeMtb) {
+					const preserveWidth = hasSeparatedStrokes(layer.id);
 					const targetWidth = config.trailWidth || 4; //enforcing fallback just in case.
 					const width = transformStops(original.paint["line-width"], function (base) {
 						const expression = ["match", level];
@@ -228,7 +264,7 @@
 						expression.push(base); // unrated trails keep their standard width
 						return expression;
 					}, targetWidth);
-					setPaint(layer.id, "line-width", width);
+					setPaint(layer.id, "line-width", preserveWidth ? original.paint["line-width"] : width);
 				}
 				applied.push(layer.id);
 			}
