@@ -52,11 +52,21 @@
 		return null;
 	}
 
+	//check map properties dynamically mmkay.
 	function levelExpression() {
-		const value = ["to-string", ["get", "mtb_scale"]];
+		const value = [
+			"to-string",
+			["coalesce", 
+				["get", "mtb_scale"], 
+				["get", "sac_scale"], 
+				["get", "trail_difficulty"], 
+				"none"
+			]
+		];
 		const expression = ["match", value];
+		//store the values 
 		for (let level = 0; level <= 5; level++) {
-			expression.push([String(level), `${level}+`, `${level}-`, `S${level}`, `s${level}`], level);
+			expression.push([String(level), `${level}+`, `${level}-`, `S${level}`, `s${level}`, `T${level}`, `t${level}`], level);
 		}
 		expression.push(-1);
 		return expression;
@@ -131,24 +141,39 @@
 				postStatus({ ready: true, enabled: false });
 				return;
 			}
+			
+			
 			const layers = (map.getStyle()?.layers || []).filter((layer) =>
-				/mtb/i.test(layer.id) && ["line", "symbol"].includes(layer.type) &&
-				JSON.stringify([layer.filter, layer.layout]).includes('"mtb_scale"'));
+				//look for the drawn lines based on different paths/tracks etc. 
+				["line", "symbol"].includes(layer.type) &&
+				(
+					/(mtb_scale|sac_scale|trail_difficulty)/.test(JSON.stringify([layer.filter, layer.layout])) ||
+					/(path|track|footway|cycleway|trail|steps)/i.test(layer.id)
+				)
+			);
+
 			const level = levelExpression();
 			const max = Number(config.maximumTrailLevel.slice(1));
 			const applied = [];
+
 			for (const layer of layers) {
 				const liveLayer = map.getLayer(layer.id);
 				const colourProperty = layer.type === "line" ? "line-color" : "text-color";
 				const opacityProperty = layer.type === "line" ? "line-opacity" : "text-opacity";
 				if (!originals.has(layer.id) || originals.get(layer.id).layer !== liveLayer) {
+					const paintBackup = {
+						[colourProperty]: structuredClone(map.getPaintProperty(layer.id, colourProperty)),
+						[opacityProperty]: structuredClone(map.getPaintProperty(layer.id, opacityProperty))
+					};
+					//line width property
+					if (layer.type === "line") {
+						paintBackup["line-width"] = structuredClone(map.getPaintProperty(layer.id, "line-width"));
+					}
+					
 					originals.set(layer.id, {
 						layer: liveLayer,
 						filter: structuredClone(map.getFilter(layer.id)),
-						paint: {
-							[colourProperty]: structuredClone(map.getPaintProperty(layer.id, colourProperty)),
-							[opacityProperty]: structuredClone(map.getPaintProperty(layer.id, opacityProperty))
-						}
+						paint: paintBackup
 					});
 				}
 				const original = originals.get(layer.id);
@@ -192,6 +217,18 @@
 							return expression;
 						}, fallback));
 					}
+				}
+				//adding line width to the paths/trails
+				if (layer.type === "line") {
+					const targetWidth = config.trailWidth || 4; //enforcing fallback just in case.
+					const width = transformStops(original.paint["line-width"], function (base) {
+						const expression = ["match", level];
+						// line width drawn
+						for (let index = 0; index <= 5; index++) expression.push(index, ["max", base, targetWidth]);
+						expression.push(base); // unrated trails keep their standard width
+						return expression;
+					}, targetWidth);
+					setPaint(layer.id, "line-width", width);
 				}
 				applied.push(layer.id);
 			}
@@ -237,6 +274,17 @@
 		const found = findMap();
 		if (!found) return;
 		map = found;
+		
+		//debug the map properties. use this to find the drawn line properties.
+		/* remove comment to enable debug.
+		map.on("click", function (event) {
+			const features = map.queryRenderedFeatures(event.point);
+			console.log("Clicked Map Features:", features.map(f => ({
+				layer: f.layer.id,
+				properties: f.properties
+			})));
+		});
+		*/
 		map.on("styledata", scheduleApply);
 		map.on("idle", scheduleApply);
 		postStatus({ ready: true });
