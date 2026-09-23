@@ -25,6 +25,11 @@
       <p class="hint"><span class="avoid-dot"></span> Avoid marks a level dark red. It is a visual warning, not a routing restriction.</p>
       <label class="checkbox-setting"><input id="rememberLayers" type="checkbox"> <span>Remember layer settings</span></label>
       <p class="hint">Restore your last selected map type, sport-specific map, and heatmap when the planner opens.</p>
+      <label class="setting" for="squadratsOpacity">
+        <span>Squadrats opacity <output id="squadratsOpacityValue" for="squadratsOpacity">100%</output></span>
+        <input id="squadratsOpacity" type="range" min="0" max="100" step="1" value="100" aria-describedby="squadratsHint">
+      </label>
+      <p class="hint" id="squadratsHint">Fade Squadrats fills, borders and grids. 100% keeps its original appearance. Requires an active Squadrats overlay; independent of trail visuals.</p>
       <button id="restore" type="button">Restore suggested rules</button>
       <p id="status" role="status" aria-live="polite"></p>
     </main>

@@ -1,5 +1,6 @@
 (function () {
 	const originals = new Map();
+	const squadratsOriginals = new Map();
 	const colours = ["#26a269", "#1c9cc5", "#6c63ff", "#f6a609", "#e66b2e", "#c01c28"];
 	let map;
 	let config;
@@ -108,10 +109,33 @@
 		originals.clear();
 	}
 
+	function applySquadrats() {
+		const percent = Number.isFinite(config.squadratsOpacity) ? Math.max(0, Math.min(100, config.squadratsOpacity)) : 100;
+		const sources = new Set(["squadrats-source", "squadrats-new-squadrats", "squadrats-new-squadratinhos", "squadrats-grid", "squadrats-gridinho"]);
+		const layers = (map.getStyle()?.layers || []).filter((layer) =>
+			layer.id.startsWith("squadrats-") && sources.has(layer.source) && ["fill", "line"].includes(layer.type));
+		const ids = new Set(layers.map((layer) => layer.id));
+		for (const id of squadratsOriginals.keys()) if (!ids.has(id)) squadratsOriginals.delete(id);
+		for (const layer of layers) {
+			const property = `${layer.type}-opacity`;
+			const live = map.getLayer(layer.id);
+			const current = map.getPaintProperty(layer.id, property);
+			let original = squadratsOriginals.get(layer.id);
+			if (!original || original.layer !== live || !same(current, original.applied)) {
+				original = { layer: live, value: structuredClone(current), applied: structuredClone(current) };
+				squadratsOriginals.set(layer.id, original);
+			}
+			const value = percent === 100 ? original.value : transformStops(original.value, (base) => ["*", base, percent / 100], 1);
+			setPaint(layer.id, property, value);
+			original.applied = structuredClone(value);
+		}
+	}
+
 	function apply() {
 		if (!map || !config || applying) return;
 		applying = true;
 		try {
+			applySquadrats();
 			if (config.visualsEnabled === false) {
 				restore();
 				postStatus({ ready: true, enabled: false });
@@ -243,6 +267,7 @@
 			map.off("idle", scheduleApply);
 			map = undefined;
 			originals.clear();
+			squadratsOriginals.clear();
 			searchAttempts = 0;
 		}
 		if (map || ++searchAttempts > 30) return;

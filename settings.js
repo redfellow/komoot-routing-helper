@@ -12,6 +12,7 @@ const DEFAULT_RULES = {
 
 const DEFAULT_OPTIONS = {
 	visualsEnabled: true,
+	squadratsOpacity: 100,
   maximumTrailLevel: "S5",
   rememberLayers: false,
   rememberedLayers: {}
@@ -40,9 +41,10 @@ async function getRules() {
 }
 
 async function getOptions() {
-  const saved = await globalThis.KrbBrowser.storage.sync.get(["trailOptions", "trailVisualsEnabled"]);
+  const saved = await globalThis.KrbBrowser.storage.sync.get(["trailOptions", "trailVisualsEnabled", "squadratsOpacity"]);
   const options = { ...DEFAULT_OPTIONS, ...(saved.trailOptions || {}) };
 	if (typeof saved.trailVisualsEnabled === "boolean") options.visualsEnabled = saved.trailVisualsEnabled;
+	options.squadratsOpacity = Number.isFinite(saved.squadratsOpacity) ? Math.max(0, Math.min(100, saved.squadratsOpacity)) : 100;
   // Version 0.1 stored a { label, selector } object. Keep existing users' choices valid.
   options.rememberedLayers = Object.fromEntries(Object.entries(options.rememberedLayers || {})
     .map(([kind, value]) => [kind, typeof value === "string" ? value : value?.label])
