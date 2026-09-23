@@ -18,7 +18,7 @@ function installMapBridge() {
 }
 
 function sendMapConfig(rules, options, colours) {
-  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
+  window.postMessage({ type: "KRB_MAP_CONFIG", config: { rules, colours, squadratsOpacity: options.squadratsOpacity, visualsEnabled: options.visualsEnabled !== false, maximumTrailLevel: options.maximumTrailLevel } }, location.origin);
 }
 
 function createPanel(state) {
@@ -380,8 +380,9 @@ async function restoreLayers(options) {
   }, 350);
 }
 
-async function refresh(shouldRestore = false, previewColours) {
+async function refresh(shouldRestore = false, previewColours, squadratsOpacity) {
   const [rules, options, savedColours] = await Promise.all([contentSettings.getRules(), contentSettings.getOptions(), contentSettings.getColours()]);
+	if (Number.isFinite(squadratsOpacity)) options.squadratsOpacity = squadratsOpacity;
   const colours = previewColours || savedColours;
   const { panelState } = await globalThis.KrbBrowser.storage.local.get("panelState");
   createPanel(panelState);
@@ -398,6 +399,10 @@ async function refresh(shouldRestore = false, previewColours) {
 }
 
 globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
+	if (sender.id === globalThis.KrbBrowser.runtime.id && message?.type === "KRB_PREVIEW_SQUADRATS" &&
+		Number.isFinite(message.opacity) && message.opacity >= 0 && message.opacity <= 100) {
+		return refresh(false, undefined, message.opacity);
+	}
 	if (sender.id !== globalThis.KrbBrowser.runtime.id || message?.type !== "KRB_PREVIEW_COLOURS") return;
 	const colours = message.colours;
 	if (!colours || !contentSettings.LEVELS.every((level) => /^#[0-9a-f]{6}$/i.test(colours[level]))) return;
@@ -405,7 +410,7 @@ globalThis.KrbBrowser.runtime.onMessage.addListener(function (message, sender) {
 });
 
 globalThis.KrbBrowser.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours || changes.trailVisualsEnabled)) refresh(false);
+  if (area === "sync" && (changes.trailRules || changes.trailOptions || changes.trailColours || changes.trailVisualsEnabled || changes.squadratsOpacity)) refresh(false);
 });
 
 document.addEventListener("click", rememberLayerClick, true);

@@ -163,9 +163,45 @@ document.querySelector("#restore").addEventListener("click", async function () {
   status.textContent = "Suggested rules restored.";
 });
 
+let squadratsFrame;
+let squadratsSaveTimer;
+let squadratsWrites = Promise.resolve();
+function previewSquadrats() {
+	const slider = document.querySelector("#squadratsOpacity");
+	document.querySelector("#squadratsOpacityValue").textContent = `${slider.value}%`;
+	if (!squadratsFrame) squadratsFrame = window.requestAnimationFrame(async function () {
+		squadratsFrame = undefined;
+		try {
+			const [tab] = await globalThis.KrbBrowser.tabs.query({ active: true, currentWindow: true });
+			if (tab?.id) await globalThis.KrbBrowser.tabs.sendMessage(tab.id, { type: "KRB_PREVIEW_SQUADRATS", opacity: Number(slider.value) });
+		}
+		catch (error) { console.debug("Squadrats preview unavailable:", error.message); }
+	});
+	window.clearTimeout(squadratsSaveTimer);
+	squadratsSaveTimer = window.setTimeout(saveSquadrats, 500);
+}
+
+async function saveSquadrats() {
+	window.clearTimeout(squadratsSaveTimer);
+	squadratsSaveTimer = undefined;
+	const opacity = Number(document.querySelector("#squadratsOpacity").value);
+	squadratsWrites = squadratsWrites.then(function () {
+		return globalThis.KrbBrowser.storage.sync.set({ squadratsOpacity: opacity });
+	}).catch(function (error) {
+		status.textContent = "Could not save Squadrats opacity. Please try again.";
+		console.error("Squadrats opacity save failed:", error);
+	});
+	await squadratsWrites;
+}
+
 async function initialise() {
   const [rules, options, colours] = await Promise.all([popupSettings.getRules(), popupSettings.getOptions(), popupSettings.getColours()]);
   render(rules, colours);
+	const slider = document.querySelector("#squadratsOpacity");
+	slider.value = options.squadratsOpacity;
+	document.querySelector("#squadratsOpacityValue").textContent = `${options.squadratsOpacity}%`;
+	slider.addEventListener("input", previewSquadrats);
+	slider.addEventListener("change", saveSquadrats);
   document.querySelector("#maximumLevel").value = options.maximumTrailLevel;
   document.querySelector("#rememberLayers").checked = options.rememberLayers;
   document.querySelector("#maximumLevel").addEventListener("change", saveOptions);
@@ -174,6 +210,7 @@ async function initialise() {
 
 window.addEventListener("pagehide", function () {
 	if (colourSaveTimer !== undefined) saveColours();
+	if (squadratsSaveTimer !== undefined) saveSquadrats();
 });
 
 initialise();
