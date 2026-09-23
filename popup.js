@@ -195,6 +195,15 @@ async function saveSquadrats() {
 }
 
 async function initialise() {
+	for (const help of document.querySelectorAll(".help")) {
+		help.addEventListener("pointerenter", function (event) {
+			if (event.pointerType === "mouse") help.open = true;
+		});
+		help.addEventListener("pointerleave", function (event) {
+			if (event.pointerType === "mouse" && !help.contains(document.activeElement)) help.open = false;
+		});
+	}
+
   const [rules, options, colours] = await Promise.all([popupSettings.getRules(), popupSettings.getOptions(), popupSettings.getColours()]);
   render(rules, colours);
 	const slider = document.querySelector("#squadratsOpacity");
