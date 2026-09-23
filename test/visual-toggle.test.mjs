@@ -17,11 +17,21 @@ function fixture() {
 	const timers = [];
 	const events = {};
 	let interval;
-	let receive;
+	const receivers = [];
+	const messages = [];
+	const sources = new Map();
+	function receive(event) { for (const fn of receivers) fn(event); }
 	let writes = 0;
 	const canvas = {};
 	const map = {
 		getCanvas() { return canvas; },
+		getBounds() { return { getSouth: () => 61, getNorth: () => 61.01, getWest: () => 23, getEast: () => 23.01 }; },
+		getZoom() { return 16; },
+		getSource(id) { return sources.get(id); },
+		addSource(id, source) { sources.set(id, source); },
+		removeSource(id) { sources.delete(id); },
+		addLayer(layer) { layers.push(copy(layer)); },
+		removeLayer(id) { layers.splice(layers.findIndex((layer) => layer.id === id), 1); },
 		getStyle() { return { layers }; },
 		getLayer(id) { return layers.find((layer) => layer.id === id); },
 		getFilter(id) { return this.getLayer(id).filter; },
@@ -38,10 +48,11 @@ function fixture() {
 	const fiber = { state: { map } };
 	Object.defineProperty(fiber, "unsafe", { get() { throw new Error("Getter invoked"); } });
 	canvas.parentElement = { __reactFiber$test: fiber };
-	const window = { postMessage() {}, addEventListener(type, fn) { receive = fn; } };
+	const window = { postMessage(message) { messages.push(copy(message)); }, addEventListener(type, fn) { receivers.push(fn); } };
 	runInNewContext(source, {
 		window, Node: class {}, console, location: { origin: "https://www.komoot.com" }, structuredClone,
 		document: { contains(value) { return value === canvas; }, querySelectorAll() { return [canvas]; } },
+		clearTimeout() {},
 		setInterval(fn) { interval = fn; },
 		setTimeout(fn) { timers.push(fn); return timers.length; }
 	});
@@ -54,7 +65,7 @@ function fixture() {
 		flush();
 	}
 	interval(); flush();
-	return { layers, original, configure, writes: () => writes, restyle() { events.styledata(); flush(); } };
+	return { layers, original, configure, messages, sources, reply(data) { receive({ source: window, origin: "https://www.komoot.com", data }); flush(); }, writes: () => writes, restyle() { events.styledata(); flush(); } };
 }
 
 function evaluate(expression, properties) {
@@ -365,4 +376,26 @@ test("visible MTB labels do not suppress base trail colouring when MTB lines are
 	f.layers[0].layout.visibility = "visible";
 	f.restyle();
 	assert.deepEqual(path, baseline);
+});
+
+
+test("hazard overlays survive restyling, remain independent and ignore replies after disabling", function () {
+	const f = fixture();
+	f.configure({ showHazards: true, visualsEnabled: false });
+	const request = f.messages.find((message) => message.type === "KRB_HAZARD_VIEW");
+	assert.ok(request);
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	assert.equal(f.sources.has("krb-conditions"), true);
+	const original = copy(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")));
+	assert.equal(original.length, 3);
+	f.configure({ showHazards: true, visualsEnabled: true });
+	f.restyle();
+	assert.deepEqual(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")), original);
+	f.layers.splice(f.layers.findIndex((layer) => layer.id === "krb-conditions-line"), 1);
+	f.restyle();
+	assert.equal(f.layers.filter((layer) => layer.id.startsWith("krb-conditions")).length, 3);
+	f.configure({ showHazards: false });
+	assert.equal(f.sources.has("krb-conditions"), false);
+	f.reply({ type: "KRB_HAZARD_DATA", requestId: request.requestId, data: { type: "FeatureCollection", features: [] } });
+	assert.equal(f.sources.has("krb-conditions"), false);
 });

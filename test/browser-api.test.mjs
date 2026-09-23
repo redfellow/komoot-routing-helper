@@ -11,7 +11,7 @@ for (const namespace of ["chrome", "browser"]) {
 		let popupWindow;
 		const api = {
 			storage: { sync: { async get() { return { trailVisualsEnabled: false }; } } },
-			runtime: { id: "krb-test", onMessage: { addListener(fn) { listener = fn; } } },
+			runtime: { id: "krb-test", onMessage: { addListener(fn) { listener ||= fn; } } },
 			action: { async openPopup({ windowId }) { popupWindow = windowId; } }
 		};
 		const context = { [namespace]: api };
@@ -46,5 +46,5 @@ test("adapter loads before API consumers in each extension entry point", functio
 	assert.ok(popup.indexOf('src="browser-api.js"') < popup.indexOf('src="settings.js"'));
 	const loaded = [];
 	runInNewContext(read(manifest.background.service_worker), { importScripts(...files) { loaded.push(...files); } });
-	assert.deepEqual(loaded, ["browser-api.js", "background.js"]);
+	assert.deepEqual(loaded, ["browser-api.js", "hazards.js", "background.js"]);
 });
